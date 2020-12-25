@@ -1,21 +1,17 @@
-import config
-import numpy as np
-import time
-import os
-import pretty_midi as pm
-import math
-import random
 import json
-import pickle
-import progressbar
-from sklearn.model_selection import train_test_split
-import tables
-import matplotlib.pyplot as plt
-import pypianoroll as pproll
+import os
 import pprint
-import itertools
-from keras.utils import to_categorical
+import random
 from collections import Counter
+
+import numpy as np
+import pretty_midi as pm
+import progressbar
+import pypianoroll as pproll
+import tables
+from keras.utils import to_categorical
+
+import config
 
 pp = pprint.PrettyPrinter(indent=4)
 

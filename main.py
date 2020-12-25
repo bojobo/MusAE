@@ -1,16 +1,8 @@
-import config
-import matplotlib.pyplot as plt
-from train import MusAE
-from train_gm import MusAE_GM
-from dataset import MidiDataset
-import os
-import numpy as np
-import pretty_midi as pm
-import pypianoroll as pproll
-from keras import backend as K
-import keras
 import pprint
-from mpl_toolkits.mplot3d import Axes3D
+
+import config
+from dataset import MidiDataset
+from train_gm import MusAE_GM
 
 pp = pprint.PrettyPrinter(indent=4)
 

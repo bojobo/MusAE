@@ -1,9 +1,9 @@
-from keras.layers import Concatenate, RepeatVector, TimeDistributed, Reshape, Permute
-from keras.layers import Add, Lambda, Flatten, BatchNormalization, Activation
-from keras.layers import Input, LSTM, Dense, GRU, Bidirectional, CuDNNLSTM
 from keras import backend as K
-from keras.engine.topology import Layer
+from keras.layers import Input, Dense, Bidirectional, CuDNNLSTM
+from keras.layers import Lambda
+from keras.layers import Reshape
 from keras.models import Model
+
 import config
 
 

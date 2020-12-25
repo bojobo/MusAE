@@ -1,5 +1,5 @@
-from keras.optimizers import RMSprop, Adam
 from keras import backend as K
+from keras.optimizers import Adam
 
 model_params = {
     "infomax_net_params": {

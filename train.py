@@ -1,45 +1,31 @@
 from __future__ import print_function, division
 
-from keras.layers import Concatenate, RepeatVector, TimeDistributed, Reshape, Permute
-from keras.layers import Add, Lambda, Flatten, BatchNormalization, Activation
-from keras.layers import Input, LSTM, Dense, GRU, Bidirectional, CuDNNLSTM
-from keras.layers.merge import _Merge
-
-from keras.initializers import Zeros
-
-from keras.models import Model
-from keras.models import load_model
-
-from keras.optimizers import RMSprop, Adam
-from functools import partial
-
-from keras.utils import print_summary, plot_model
-from keras.utils import to_categorical
-
-from keras import backend as K
-from keras.engine.topology import Layer
-
 import functools
-import tensorflow as tf
-import gpustat
+import json
+import os
+import pprint
+import random
+import threading
+import time
+from functools import partial
+from queue import Queue
 
-from sklearn.model_selection import train_test_split
+import gpustat
 import matplotlib.pyplot as plt
-import sys, os
 import numpy as np
 import progressbar
-import time
-import itertools
-import math, random
-import json
-from queue import Queue
-import threading
-import pickle
-import pypianoroll as pproll
-import config, encoders, decoders, discriminators
-from scipy.stats import pearsonr
+import tensorflow as tf
+from keras import backend as K
+from keras.layers import Concatenate
+from keras.layers import Input
+from keras.layers.merge import _Merge
+from keras.models import Model
+from keras.utils import plot_model
+from sklearn.model_selection import train_test_split
 
-import pprint
+import decoders
+import discriminators
+import encoders
 
 pp = pprint.PrettyPrinter(indent=4)
 
