@@ -1,51 +1,57 @@
 from __future__ import print_function, division
 
-import functools
 import json
 import os
 import pprint
 import random
 import threading
-import time
 from functools import partial
 from queue import Queue
 
-import gpustat
-import matplotlib.pyplot as plt
 import numpy as np
-import progressbar
-import tensorflow as tf
-from keras import backend as K
+from keras import backend as k
 from keras.layers import Concatenate
 from keras.layers import Input
-from keras.layers.merge import _Merge
 from keras.models import Model
 from keras.utils import plot_model
 from sklearn.model_selection import train_test_split
 
+import config as cfg
 import decoders
 import discriminators
 import encoders
+import helper as h
 
 pp = pprint.PrettyPrinter(indent=4)
 
 
-class RandomWeightedAverage(_Merge):
-    def _merge_function(self, inputs):
-        batch_size = K.shape(inputs[0])[0]
-        weights = K.random_uniform((batch_size, 1))
-        return (weights * inputs[0]) + ((1 - weights) * inputs[1])
-
-
-class MusAE():
-    def __init__(self, **kwargs):
+class MusAE:
+    def __init__(self):
         # setting params as class attributes
-        self.__dict__.update(kwargs)
+        self.plots_path = cfg.general_params["plots_path"]
+
+        self.name = cfg.model_params["name"]
+        self.s_length = cfg.model_params["s_length"]
+        self.z_length = cfg.model_params["z_length"]
+
+        self.phrase_size = cfg.midi_params["phrase_size"]
+        self.n_cropped_notes = cfg.midi_params["n_cropped_notes"]
+        self.n_tracks = cfg.midi_params["n_tracks"]
+
+        self.regularisation_weight = cfg.training_params["regularisation_weight"]
+        self.reconstruction_weight = cfg.training_params["reconstruction_weight"]
+        self.z_lambda = cfg.training_params["z_lambda"]
+        self.aae_optim = cfg.training_params["aae_optim"]
+        self.n_epochs = cfg.training_params["n_epochs"]
+        self.s_lambda = cfg.training_params["s_lambda"]
+        self.supervised_weight = cfg.training_params["supervised_weight"]
+        self.infomax_weight = cfg.training_params["infomax_weight"]
+
+        # Initialize
+        self.len_tr_set = -1
+        self.len_vl_set = -1
 
         print("n_cropped_notes: ", self.n_cropped_notes)
-
-        # using GPU with most memory avaiable
-        self.set_gpu()
 
         print("Initialising encoder...")
         self.encoder = encoders.build_encoder_sz()
@@ -63,8 +69,7 @@ class MusAE():
         # self.infomax_net = discriminators.build_infomax_network()
 
         path = os.path.join(self.plots_path, self.name, "models")
-        if not os.path.exists(path):
-            os.makedirs(path)
+        h.create_dirs(path)
 
         print("Saving model plots..")
         plot_model(self.encoder, os.path.join(path, "encoder.png"), show_shapes=True)
@@ -84,13 +89,13 @@ class MusAE():
         self.s_discriminator.trainable = False
         # self.infomax_net.trainable = False
 
-        X = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_recon")
-        s_recon, z_recon = self.encoder(X)
-        Y_drums, Y_bass, Y_guitar, Y_strings = self.decoder([s_recon, z_recon])
+        x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_recon")
+        s_recon, z_recon = self.encoder(x)
+        y_drums, y_bass, y_guitar, y_strings = self.decoder([s_recon, z_recon])
 
         self.reconstruction_phase = Model(
-            inputs=X,
-            outputs=[Y_drums, Y_bass, Y_guitar, Y_strings],
+            inputs=x,
+            outputs=[y_drums, y_bass, y_guitar, y_strings],
             name="autoencoder"
         )
         plot_model(self.reconstruction_phase, os.path.join(path, "reconstruction_phase.png"), show_shapes=True)
@@ -106,17 +111,17 @@ class MusAE():
         self.s_discriminator.trainable = False
         # self.infomax_net.trainable = False
 
-        X = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_z_reg")
+        x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_z_reg")
         z_real = Input(shape=(self.z_length,), name="z_reg")
-        _, z_fake = self.encoder(X)
-        z_int = RandomWeightedAverage(name="weighted_avg_z")([z_real, z_fake])
+        _, z_fake = self.encoder(x)
+        z_int = h.RandomWeightedAverage(name="weighted_avg_z")([z_real, z_fake])
 
         z_valid_real = self.z_discriminator(z_real)
         z_valid_fake = self.z_discriminator(z_fake)
         z_valid_int = self.z_discriminator(z_int)
 
         self.z_regularisation_phase = Model(
-            [z_real, X],
+            [z_real, x],
             [z_valid_real, z_valid_fake, z_valid_int, z_int],
             name="z_regularisation_phase"
         )
@@ -133,18 +138,18 @@ class MusAE():
         self.s_discriminator.trainable = True
         # self.infomax_net.trainable = False
 
-        X = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_s_reg")
+        x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_s_reg")
         s_real = Input(shape=(self.s_length,), name="s_reg")
 
-        s_fake, _ = self.encoder(X)
-        s_int = RandomWeightedAverage(name="weighted_avg_s")([s_real, s_fake])
+        s_fake, _ = self.encoder(x)
+        s_int = h.RandomWeightedAverage(name="weighted_avg_s")([s_real, s_fake])
 
         s_valid_real = self.s_discriminator(s_real)
         s_valid_fake = self.s_discriminator(s_fake)
         s_valid_int = self.s_discriminator(s_int)
 
         self.s_regularisation_phase = Model(
-            [s_real, X],
+            [s_real, x],
             [s_valid_real, s_valid_fake, s_valid_int, s_int],
             name="s_regularisation_phase"
         )
@@ -161,15 +166,15 @@ class MusAE():
         self.s_discriminator.trainable = False
         # self.infomax_net.trainable = False
 
-        X = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_gen_reg")
+        x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_gen_reg")
 
-        s_gen, z_gen = self.encoder(X)
+        s_gen, z_gen = self.encoder(x)
 
         z_valid_gen = self.z_discriminator(z_gen)
         s_valid_gen = self.s_discriminator(s_gen)
 
         self.gen_regularisation_phase = Model(
-            inputs=X,
+            inputs=x,
             outputs=[s_valid_gen, z_valid_gen],
             name="gen_regularisation_phase"
         )
@@ -186,12 +191,12 @@ class MusAE():
         self.s_discriminator.trainable = False
         # self.infomax_net.trainable = False
 
-        X = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_sup")
+        x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_sup")
 
-        s_pred, _ = self.encoder(X)
+        s_pred, _ = self.encoder(x)
 
         self.supervised_phase = Model(
-            inputs=X,
+            inputs=x,
             outputs=s_pred,
             name="supervised_phase"
         )
@@ -208,11 +213,11 @@ class MusAE():
         z_info = Input(shape=(self.z_length,), name="z_info")
         s_info = Input(shape=(self.s_length,), name="s_info")
 
-        Y_drums_info, Y_bass_info, Y_guitar_info, Y_strings_info = self.decoder([s_info, z_info])
+        y_drums_info, y_bass_info, y_guitar_info, y_strings_info = self.decoder([s_info, z_info])
 
-        Y = Concatenate(axis=-1, name="concat")([Y_drums_info, Y_bass_info, Y_guitar_info, Y_strings_info])
+        y = Concatenate(axis=-1, name="concat")([y_drums_info, y_bass_info, y_guitar_info, y_strings_info])
 
-        s_info_pred, _ = self.encoder(Y)
+        s_info_pred, _ = self.encoder(y)
 
         # s_info_pred = self.infomax_net([Y_drums_info, Y_bass_info, Y_guitar_info, Y_strings_info])
 
@@ -234,21 +239,21 @@ class MusAE():
         self.z_discriminator.trainable = True
         self.s_discriminator.trainable = True
 
-        X = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X")
+        x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X")
         z_real = Input(shape=(self.z_length,), name="z")
         s_real = Input(shape=(self.s_length,), name="s")
 
-        Y_drums, Y_bass, Y_guitar, Y_strings = self.reconstruction_phase(X)
-        z_valid_real, z_valid_fake, z_valid_int, z_int = self.z_regularisation_phase([z_real, X])
-        s_valid_real, s_valid_fake, s_valid_int, s_int = self.s_regularisation_phase([s_real, X])
-        s_valid_gen, z_valid_gen = self.gen_regularisation_phase(X)
-        s_pred = self.supervised_phase(X)
+        y_drums, y_bass, y_guitar, y_strings = self.reconstruction_phase(x)
+        z_valid_real, z_valid_fake, z_valid_int, z_int = self.z_regularisation_phase([z_real, x])
+        s_valid_real, s_valid_fake, s_valid_int, s_int = self.s_regularisation_phase([s_real, x])
+        s_valid_gen, z_valid_gen = self.gen_regularisation_phase(x)
+        s_pred = self.supervised_phase(x)
         s_infomax = self.infomax_phase([s_real, z_real])
 
         self.adversarial_autoencoder = Model(
-            inputs=[s_real, z_real, X],
+            inputs=[s_real, z_real, x],
             outputs=[
-                Y_drums, Y_bass, Y_guitar, Y_strings,
+                y_drums, y_bass, y_guitar, y_strings,
                 s_valid_real, s_valid_fake, s_valid_int,
                 z_valid_real, z_valid_fake, z_valid_int,
                 s_valid_gen, z_valid_gen,
@@ -259,19 +264,19 @@ class MusAE():
         )
 
         # prepare gp losses
-        self.s_gp_loss = partial(self.gradient_penalty_loss, averaged_samples=s_int)
+        self.s_gp_loss = partial(h.gradient_penalty_loss, averaged_samples=s_int)
         self.s_gp_loss.__name__ = "gradient_penalty_s"
 
-        self.z_gp_loss = partial(self.gradient_penalty_loss, averaged_samples=z_int)
+        self.z_gp_loss = partial(h.gradient_penalty_loss, averaged_samples=z_int)
         self.z_gp_loss.__name__ = "gradient_penalty_z"
 
         self.adversarial_autoencoder.compile(
             loss=[
                 "categorical_crossentropy", "categorical_crossentropy", "categorical_crossentropy",
                 "categorical_crossentropy",
-                self.wasserstein_loss, self.wasserstein_loss, self.s_gp_loss,
-                self.wasserstein_loss, self.wasserstein_loss, self.z_gp_loss,
-                self.wasserstein_loss, self.wasserstein_loss,
+                h.wasserstein_loss, h.wasserstein_loss, self.s_gp_loss,
+                h.wasserstein_loss, h.wasserstein_loss, self.z_gp_loss,
+                h.wasserstein_loss, h.wasserstein_loss,
                 "binary_crossentropy",
                 "binary_crossentropy"
             ],
@@ -288,106 +293,32 @@ class MusAE():
             metrics=[
                 "categorical_accuracy",
                 "binary_accuracy",
-                self.output
+                h.output
             ]
         )
         plot_model(self.adversarial_autoencoder, os.path.join(path, "adversarial_autoencoder.png"), show_shapes=True)
 
-    def set_gpu(self):
-        stats = gpustat.GPUStatCollection.new_query()
-        ids = map(lambda gpu: int(gpu.entry['index']), stats)
-        ratios = map(lambda gpu: float(gpu.entry['memory.used']) / float(gpu.entry['memory.total']), stats)
-        bestGPU = min(zip(ids, ratios), key=lambda x: x[1])[0]
-
-        print("Setting GPU to: {}".format(bestGPU))
-        os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(bestGPU)
-
-    # Just report the mean output of the model (useful for WGAN)
-    def output(self, y_true, y_pred):
-        return K.mean(y_pred)
-
-    # wrapper for using tensorflow metrics in keras
-    def as_keras_metric(self, method):
-        @functools.wraps(method)
-        def wrapper(self, args, **kwargs):
-            """ Wrapper for turning tensorflow metrics into keras metrics """
-            value, update_op = method(self, args, **kwargs)
-            K.get_session().run(tf.local_variables_initializer())
-            with tf.control_dependencies([update_op]):
-                value = tf.identity(value)
-            return value
-
-        return wrapper
-
-    def precision(self, y_true, y_pred):
-        # true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        # predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-        # precision = true_positives / (predicted_positives + K.epsilon())
-        # return precision
-        precision = self.as_keras_metric(tf.metrics.precision)
-        return precision(y_true, y_pred)
-
-    def recall(self, y_true, y_pred):
-        # true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        # possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-        # recall = true_positives / (possible_positives + K.epsilon())
-        recall = self.as_keras_metric(tf.metrics.recall)
-        return recall(y_true, y_pred)
-
-    def f1_score(self, y_true, y_pred):
-        precision = self.as_keras_metric(tf.metrics.precision)
-        recall = self.as_keras_metric(tf.metrics.recall)
-
-        p = precision(y_true, y_pred)
-        r = recall(y_true, y_pred)
-        return (2 * p * r) / (p + r + K.epsilon())
-
-    # dummy loss
-    def no_loss(self, y_true, y_pred):
-        return K.zeros(shape=(1,))
-
-    def wasserstein_loss(self, y_true, y_pred):
-        return K.mean(y_true * y_pred)
-
-    def gradient_penalty_loss(self, y_true, y_pred, averaged_samples):
-        def _compute_gradients(tensor, var_list):
-            grads = tf.gradients(tensor, var_list)
-            return [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(var_list, grads)]
-
-        # gradients = K.gradients(y_pred, averaged_samples)[0]
-        gradients = _compute_gradients(y_pred, [averaged_samples])[0]
-        gradients_sqr = K.square(gradients)
-        gradients_sqr_sum = K.sum(gradients_sqr, axis=np.arange(1, len(gradients_sqr.shape)))
-        gradient_l2_norm = K.sqrt(gradients_sqr_sum)
-        gradient_penalty = K.square(1 - gradient_l2_norm)
-        return K.mean(gradient_penalty)
-
     def train_v2(self, dataset):
-        epsilon_std = self.encoder_params["epsilon_std"]
+        epsilon_std = cfg.model_params["encoder_params"]["epsilon_std"]
         # create checkpoint and plots folder
-        now = str(int(round(time.time())))
-
         paths = {
-            "interpolations": os.path.join(self.interpolations_path, self.name),
-            "autoencoded": os.path.join(self.autoencoded_path, self.name),
-            "checkpoints": os.path.join(self.checkpoints_path, self.name),
+            "interpolations": os.path.join(cfg.general_params["interpolations_path"], self.name),
+            "autoencoded": os.path.join(cfg.general_params["autoencoded_path"], self.name),
+            "checkpoints": os.path.join(cfg.general_params["checkpoints_path"], self.name),
             "plots": os.path.join(self.plots_path, self.name),
-            "sampled": os.path.join(self.sampled_path, self.name),
-            "style_transfers": os.path.join(self.style_transfers_path, self.name),
-            "latent_sweeps": os.path.join(self.latent_sweeps_path, self.name)
+            "sampled": os.path.join(cfg.general_params["sampled_path"], self.name),
+            "style_transfers": os.path.join(cfg.general_params["style_transfers_path"], self.name),
+            "latent_sweeps": os.path.join(cfg.general_params["latent_sweeps_path"], self.name)
         }
         for key in paths:
             if not os.path.exists(paths[key]):
                 os.makedirs(paths[key])
 
         print("Splitting training set and validation set...")
-        batches_path = os.path.join(self.dataset_path, "batches", "X")
+        batches_path = os.path.join(cfg.general_params["dataset_path"], "batches", "X")
 
         _, _, files = next(os.walk(batches_path))
-        self.len_dataset = len(files)
-
-        tr_set, vl_set = train_test_split(files, test_size=self.test_size)
+        tr_set, vl_set = train_test_split(files, test_size=cfg.training_params["test_size"])
         del files
 
         self.len_tr_set = len(tr_set)
@@ -442,7 +373,6 @@ class MusAE():
         }
 
         # ... let the training begin!
-        bar = progressbar.ProgressBar(max_value=(self.n_epochs * self.len_dataset))
         pbc = 0
         pbc_tr = 0
         pbc_vl = 0
@@ -454,7 +384,6 @@ class MusAE():
             print("- Epoch", epoch + 1, "of", self.n_epochs)
             print("-- Number of TR batches:", self.len_tr_set)
             print("-- Number of VL batches:", self.len_vl_set)
-            epoch_pbc = pbc
 
             print("Generating training batches...")
 
@@ -473,12 +402,10 @@ class MusAE():
             print("Training on training set...")
             # train on the training set
             for _ in range(self.len_tr_set):
-                bar.update(pbc)
-
-                X, Y, label = tr_queue.get(block=True)
+                x, y, label = tr_queue.get(block=True)
                 label = label[:, :self.s_length]
 
-                n_chunks = X.shape[0]
+                n_chunks = x.shape[0]
 
                 # Adversarial ground truth (wasserstein)
                 real_gt = -np.ones((n_chunks, 1))
@@ -493,15 +420,15 @@ class MusAE():
                 s_real = np.random.binomial(1, 0.5, size=(n_chunks, self.s_length))
 
                 # Y_split = [ Y[:, :, : , t] for t in range(self.n_tracks) ]
-                Y_drums = Y[:, :, :, 0]
-                Y_bass = Y[:, :, :, 1]
-                Y_guitar = Y[:, :, :, 2]
-                Y_strings = Y[:, :, :, 3]
+                y_drums = y[:, :, :, 0]
+                y_bass = y[:, :, :, 1]
+                y_guitar = y[:, :, :, 2]
+                y_strings = y[:, :, :, 3]
 
                 aae_loss = self.adversarial_autoencoder.train_on_batch(
-                    [s_real, z_real, X],
+                    [s_real, z_real, x],
                     [
-                        Y_drums, Y_bass, Y_guitar, Y_strings,
+                        y_drums, y_bass, y_guitar, y_strings,
                         real_gt, fake_gt, dummy_gt,
                         real_gt, fake_gt, dummy_gt,
                         real_gt, real_gt,
@@ -539,8 +466,8 @@ class MusAE():
 
                 if pbc_tr % 500 == 0:
                     print("\nPlotting stats...")
-                    print("Regularisation weight:", K.get_value(self.regularisation_weight))
-                    self.plot(paths["plots"], tr_log)
+                    print("Regularisation weight:", k.get_value(self.regularisation_weight))
+                    h.plot(paths["plots"], tr_log)
 
                 if pbc_tr % 5000 == 0:
                     print("\nSaving checkpoint...")
@@ -548,16 +475,16 @@ class MusAE():
 
                 # annealing the regularisation part
                 if pbc_tr > 1000 and not annealing_first_stage:
-                    K.set_value(self.regularisation_weight, 0.0)
-                    print("Regularisation weight annealed to ", K.get_value(self.regularisation_weight))
+                    k.set_value(self.regularisation_weight, 0.0)
+                    print("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
                     annealing_first_stage = True
                 elif pbc_tr > 10000 and not annealing_second_stage:
-                    K.set_value(self.regularisation_weight, 0.1)
-                    print("Regularisation weight annealed to ", K.get_value(self.regularisation_weight))
+                    k.set_value(self.regularisation_weight, 0.1)
+                    print("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
                     annealing_second_stage = True
                 elif pbc_tr > 15000 and not annealing_third_stage:
-                    K.set_value(self.regularisation_weight, 0.2)
-                    print("Regularisation weight annealed to ", K.get_value(self.regularisation_weight))
+                    k.set_value(self.regularisation_weight, 0.2)
+                    print("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
                     annealing_third_stage = True
 
                 pbc += 1
@@ -578,7 +505,6 @@ class MusAE():
 
             print("\nEvaluating on validation set...")
             # evaluating on validation set
-            pbc_vl0 = pbc_vl
 
             vl_log_tmp = {
                 "VL_AE_accuracy_drums": [],
@@ -590,13 +516,12 @@ class MusAE():
             }
 
             for _ in range(self.len_vl_set):
-                bar.update(pbc)
                 # try:
-                X, Y, label = vl_queue.get(block=True)
+                x, y, label = vl_queue.get(block=True)
                 label = label[:, :self.s_length]
                 # print("batch get")
 
-                n_chunks = X.shape[0]
+                n_chunks = x.shape[0]
 
                 # Adversarial ground truths (wasserstein)
                 real_gt = -np.ones((n_chunks, 1))
@@ -611,14 +536,14 @@ class MusAE():
                 s_real = np.random.binomial(1, 0.5, size=(n_chunks, self.s_length))
 
                 # Y_split = [ Y[:, :, : , t] for t in range(self.n_tracks) ]
-                Y_drums = Y[:, :, :, 0]
-                Y_bass = Y[:, :, :, 1]
-                Y_guitar = Y[:, :, :, 2]
-                Y_strings = Y[:, :, :, 3]
+                y_drums = y[:, :, :, 0]
+                y_bass = y[:, :, :, 1]
+                y_guitar = y[:, :, :, 2]
+                y_strings = y[:, :, :, 3]
                 aae_loss = self.adversarial_autoencoder.test_on_batch(
-                    [s_real, z_real, X],
+                    [s_real, z_real, x],
                     [
-                        Y_drums, Y_bass, Y_guitar, Y_strings,
+                        y_drums, y_bass, y_guitar, y_strings,
                         real_gt, fake_gt, dummy_gt,
                         real_gt, fake_gt, dummy_gt,
                         real_gt, real_gt,
@@ -653,19 +578,7 @@ class MusAE():
             with open(os.path.join(paths["plots"], "log.json"), 'w') as f:
                 json.dump(str(vl_log), f)
 
-            self.plot(paths["plots"], vl_log)
-
-    def plot(self, path, log):
-        for key, vals in log.items():
-            xs = list(range(len(vals)))
-            ys = vals
-
-            plt.clf()
-            plt.plot(xs, ys)
-            plt.xlabel('iteration')
-            plt.ylabel(key)
-
-            plt.savefig(os.path.join(path, key))
+            h.plot(paths["plots"], vl_log)
 
     def save_checkpoint(self, path, epoch):
         self.encoder.save_weights(os.path.join(path, str(epoch) + "_MusAE_encoder.h5"))

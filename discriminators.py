@@ -13,8 +13,8 @@ def build_gaussian_discriminator():
 
     # fully connected layers
     h = z
-    for l in range(fc_depth):
-        h = Dense(fc_size, activation="tanh", name=f"fc_{l}")(h)
+    for i in range(fc_depth):
+        h = Dense(fc_size, activation="tanh", name=f"fc_{i}")(h)
     # h = BatchNormalization(name=f"batchnorm_fc_{l}")(h)
 
     out = Dense(1, activation="linear", name="validity")(h)
@@ -31,8 +31,8 @@ def build_bernoulli_discriminator():
 
     # fully connected layers
     h = s
-    for l in range(fc_depth):
-        h = Dense(fc_size, activation="tanh", name=f"fc_{l}")(h)
+    for i in range(fc_depth):
+        h = Dense(fc_size, activation="tanh", name=f"fc_{i}")(h)
     # h = BatchNormalization(name=f"batchnorm_fc_{l}")(h)
 
     out = Dense(1, activation="linear", name="validity")(h)
@@ -52,8 +52,8 @@ def build_gaussian_mixture_discriminator():
     h = Concatenate(axis=-1, name="concat")([z, y])
 
     # fully connected layers
-    for l in range(fc_depth):
-        h = Dense(fc_size, activation="tanh", name=f"fc_{l}")(h)
+    for i in range(fc_depth):
+        h = Dense(fc_size, activation="tanh", name=f"fc_{i}")(h)
     # h = BatchNormalization(name=f"batchnorm_fc_{l}")(h)
 
     out = Dense(1, activation="linear", name="validity")(h)
@@ -62,36 +62,35 @@ def build_gaussian_mixture_discriminator():
 
 
 def build_infomax_network():
-    X_depth = config.model_params["infomax_net_params"]["X_depth"]
-    X_size = config.model_params["infomax_net_params"]["X_size"]
+    x_depth = config.model_params["infomax_net_params"]["X_depth"]
+    x_size = config.model_params["infomax_net_params"]["X_size"]
     phrase_size = config.midi_params["phrase_size"]
     n_cropped_notes = config.midi_params["n_cropped_notes"]
     n_tracks = config.midi_params["n_tracks"]
     s_length = config.model_params["s_length"]
-    z_length = config.model_params["z_length"]
 
-    X_drums = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_drums")
-    X_bass = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_bass")
-    X_guitar = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_guitar")
-    X_strings = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_strings")
+    x_drums = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_drums")
+    x_bass = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_bass")
+    x_guitar = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_guitar")
+    x_strings = Input(shape=(phrase_size, n_cropped_notes, 1), name="X_strings")
 
-    infomax_net_inputs = [X_drums, X_bass, X_guitar, X_strings]
+    infomax_net_inputs = [x_drums, x_bass, x_guitar, x_strings]
 
-    X = Concatenate(axis=-1, name="concat")([X_drums, X_bass, X_guitar, X_strings])
+    x = Concatenate(axis=-1, name="concat")([x_drums, x_bass, x_guitar, x_strings])
 
     # X encoder
-    h_X = Reshape((phrase_size, n_tracks * n_cropped_notes), name="reshape_X")(X)
-    for l in range(X_depth - 1):
-        h_X = Bidirectional(
-            CuDNNLSTM(X_size, return_sequences=True, name=f"rec_X_{l}"),
-            merge_mode="concat", name=f"bidirectional_X_{l}"
-        )(h_X)
+    h_x = Reshape((phrase_size, n_tracks * n_cropped_notes), name="reshape_X")(x)
+    for i in range(x_depth - 1):
+        h_x = Bidirectional(
+            CuDNNLSTM(x_size, return_sequences=True, name=f"rec_X_{i}"),
+            merge_mode="concat", name=f"bidirectional_X_{i}"
+        )(h_x)
     # h_X = BatchNormalization(name=f"batchnorm_X_{l}")(h_X)
 
     h = Bidirectional(
-        CuDNNLSTM(X_size, return_sequences=False, name=f"rec_X_{X_depth - 1}"),
-        merge_mode="concat", name=f"bidirectional_X_{X_depth - 1}"
-    )(h_X)
+        CuDNNLSTM(x_size, return_sequences=False, name=f"rec_X_{x_depth - 1}"),
+        merge_mode="concat", name=f"bidirectional_X_{x_depth - 1}"
+    )(h_x)
     # h = BatchNormalization(name=f"batchnorm_X_{X_depth}")(h_X)
 
     s = Dense(s_length, name="s", activation="sigmoid")(h)

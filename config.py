@@ -1,4 +1,4 @@
-from keras import backend as K
+from keras import backend as k
 from keras.optimizers import Adam
 
 model_params = {
@@ -48,7 +48,7 @@ training_params = {
     "z_lambda": 10,  # weight of gradient penalty loss
     "s_lambda": 10,  # weight of gradient penalty loss
     "aae_optim": Adam(learning_rate, clipnorm=1., clipvalue=.5),  # decay=1e-4),
-    "regularisation_weight": K.variable(0),
+    "regularisation_weight": k.variable(0),
     "reconstruction_weight": 1,
     "supervised_weight": 0,
     "infomax_weight": 1,
