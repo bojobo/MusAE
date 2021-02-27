@@ -1,0 +1,16 @@
+FROM tensorflow/tensorflow:1.15.0-gpu-py3
+
+RUN python3 --version
+RUN python3 -m pip install -U pip
+RUN python3 -m pip --version
+
+RUN python3 -m pip install 'keras==2.2.4'
+RUN python3 -m pip install matplotlib
+
+RUN python3 -m pip install 'pypianoroll==0.5.0'
+RUN python3 -m pip install pretty_midi
+RUN python3 -m pip install sklearn
+
+RUN python3 -c "import tensorflow, keras, pypianoroll, pretty_midi"
+RUN python3 -c "from sklearn.model_selection import train_test_split"
+RUN python3 -c "import matplotlib.pyplot as plt"
