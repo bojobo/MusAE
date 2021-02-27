@@ -1,12 +1,13 @@
 from __future__ import print_function, division
 
 import json
+import logging as log
 import os
 import pprint
-import random
 import threading
 from functools import partial
 from queue import Queue
+from typing import List
 
 import numpy as np
 from keras import backend as k
@@ -14,7 +15,6 @@ from keras.layers import Concatenate
 from keras.layers import Input
 from keras.models import Model
 from keras.utils import plot_model
-from sklearn.model_selection import train_test_split
 
 import config as cfg
 import decoders
@@ -22,15 +22,15 @@ import discriminators
 import encoders
 import helper as h
 
+log.getLogger(__name__)
+
 pp = pprint.PrettyPrinter(indent=4)
 
 
 class MusAE:
     def __init__(self):
         # setting params as class attributes
-        self.plots_path = cfg.general_params["plots_path"]
-
-        self.name = cfg.model_params["name"]
+        self.name = "MusAE"
         self.s_length = cfg.model_params["s_length"]
         self.z_length = cfg.model_params["z_length"]
 
@@ -47,31 +47,25 @@ class MusAE:
         self.supervised_weight = cfg.training_params["supervised_weight"]
         self.infomax_weight = cfg.training_params["infomax_weight"]
 
-        # Initialize
-        self.len_tr_set = -1
-        self.len_vl_set = -1
-
-        print("n_cropped_notes: ", self.n_cropped_notes)
-
-        print("Initialising encoder...")
+        log.info("Initialising encoder...")
         self.encoder = encoders.build_encoder_sz()
 
-        print("Initialising decoder...")
+        log.info("Initialising decoder...")
         self.decoder = decoders.build_decoder_sz_flat()
 
-        print("Initialising z discriminator...")
+        log.info("Initialising z discriminator...")
         self.z_discriminator = discriminators.build_gaussian_discriminator()
 
-        print("Initialising s discriminator...")
+        log.info("Initialising s discriminator...")
         self.s_discriminator = discriminators.build_bernoulli_discriminator()
 
         # print("Initialising infomax network...")
         # self.infomax_net = discriminators.build_infomax_network()
 
-        path = os.path.join(self.plots_path, self.name, "models")
+        path = os.path.join(cfg.plots_path, self.name, "models")
         h.create_dirs(path)
 
-        print("Saving model plots..")
+        log.info("Saving model plots..")
         plot_model(self.encoder, os.path.join(path, "encoder.png"), show_shapes=True)
         plot_model(self.decoder, os.path.join(path, "decoder.png"), show_shapes=True)
         plot_model(self.z_discriminator, os.path.join(path, "z_discriminator.png"), show_shapes=True)
@@ -82,7 +76,7 @@ class MusAE:
         # Construct Computational Graph
         # for the Adversarial Autoencoder
         # -------------------------------
-        print("Building reconstruction phase's computational graph...")
+        log.info("Building reconstruction phase's computational graph...")
         self.encoder.trainable = True
         self.decoder.trainable = True
         self.z_discriminator.trainable = False
@@ -104,7 +98,7 @@ class MusAE:
         # Construct Computational Graph
         #    for the z discriminator
         # -------------------------------
-        print("Building z regularisation phase's computational graph...")
+        log.info("Building z regularisation phase's computational graph...")
         self.encoder.trainable = False
         self.decoder.trainable = False
         self.z_discriminator.trainable = True
@@ -131,7 +125,7 @@ class MusAE:
         # Construct Computational Graph
         #    for the s discriminator
         # -------------------------------
-        print("Building s regularisation phase's computational graph...")
+        log.info("Building s regularisation phase's computational graph...")
         self.encoder.trainable = False
         self.decoder.trainable = False
         self.z_discriminator.trainable = False
@@ -159,7 +153,7 @@ class MusAE:
         # Construct Computational Graph
         # for the generator (encoder)
         # -------------------------------
-        print("Building generator regularisation phase's computational graph...")
+        log.info("Building generator regularisation phase's computational graph...")
         self.encoder.trainable = True
         self.decoder.trainable = False
         self.z_discriminator.trainable = False
@@ -184,7 +178,7 @@ class MusAE:
         # Construct Computational Graph
         # for the supervised phase
         # -------------------------------
-        print("Building supervised phase's computational graph...")
+        log.info("Building supervised phase's computational graph...")
         self.encoder.trainable = True
         self.decoder.trainable = False
         self.z_discriminator.trainable = False
@@ -203,7 +197,7 @@ class MusAE:
 
         plot_model(self.supervised_phase, os.path.join(path, "supervised_phase.png"), show_shapes=True)
 
-        print("Building infomax phase's computational graph...")
+        log.info("Building infomax phase's computational graph...")
         self.encoder.trainable = True
         self.decoder.trainable = True
         self.z_discriminator.trainable = False
@@ -233,7 +227,7 @@ class MusAE:
         # Construct Computational Graph
         # for the generator (encoder)
         # -------------------------------
-        print("Building adversarial autoencoder's computational graph...")
+        log.info("Building adversarial autoencoder's computational graph...")
         self.encoder.trainable = True
         self.decoder.trainable = True
         self.z_discriminator.trainable = True
@@ -298,31 +292,20 @@ class MusAE:
         )
         plot_model(self.adversarial_autoencoder, os.path.join(path, "adversarial_autoencoder.png"), show_shapes=True)
 
-    def train_v2(self, dataset):
+    def train_v2(self, training_batches: List[list], test_batches: List[list]):
         epsilon_std = cfg.model_params["encoder_params"]["epsilon_std"]
         # create checkpoint and plots folder
         paths = {
             "interpolations": os.path.join(cfg.general_params["interpolations_path"], self.name),
             "autoencoded": os.path.join(cfg.general_params["autoencoded_path"], self.name),
             "checkpoints": os.path.join(cfg.general_params["checkpoints_path"], self.name),
-            "plots": os.path.join(self.plots_path, self.name),
+            "plots": os.path.join(cfg.plots_path, self.name),
             "sampled": os.path.join(cfg.general_params["sampled_path"], self.name),
             "style_transfers": os.path.join(cfg.general_params["style_transfers_path"], self.name),
             "latent_sweeps": os.path.join(cfg.general_params["latent_sweeps_path"], self.name)
         }
         for key in paths:
-            if not os.path.exists(paths[key]):
-                os.makedirs(paths[key])
-
-        print("Splitting training set and validation set...")
-        batches_path = os.path.join(cfg.general_params["dataset_path"], "batches", "X")
-
-        _, _, files = next(os.walk(batches_path))
-        tr_set, vl_set = train_test_split(files, test_size=cfg.training_params["test_size"])
-        del files
-
-        self.len_tr_set = len(tr_set)
-        self.len_vl_set = len(vl_set)
+            h.create_dirs(paths[key])
 
         # storing losses over time
         tr_log = {
@@ -379,31 +362,28 @@ class MusAE:
         annealing_first_stage = False
         annealing_second_stage = False
         annealing_third_stage = False
+
+        len_training_set = sum(len(batch) for batch in training_batches)
+        len_test_set = sum(len(batch) for batch in test_batches)
         # bar.update(0)
         for epoch in range(self.n_epochs):
-            print("- Epoch", epoch + 1, "of", self.n_epochs)
-            print("-- Number of TR batches:", self.len_tr_set)
-            print("-- Number of VL batches:", self.len_vl_set)
-
-            print("Generating training batches...")
+            log.info("- Epoch", epoch + 1, "of", self.n_epochs)
+            log.info("-- Number of TR batches:", len(training_batches))
+            log.info("-- Number of VL batches:", len(test_batches))
 
             tr_queue = Queue(maxsize=128)
 
             def async_batch_generator_tr():
-                # training_set = dataset.generate_batches(pianorolls_path, tr_set, batch_size=self.batch_size)
-                tr_batches = list(range(self.len_tr_set))
-                random.shuffle(tr_batches)
-                for i in tr_batches:
-                    tr_queue.put(dataset.select_batch(i), block=True)
+                for batch in training_batches:
+                    tr_queue.put(batch)
 
             training_batch_thread = threading.Thread(target=async_batch_generator_tr)
             training_batch_thread.start()
 
             print("Training on training set...")
             # train on the training set
-            for _ in range(self.len_tr_set):
-                x, y, label = tr_queue.get(block=True)
-                label = label[:, :self.s_length]
+            for _ in range(len_training_set):
+                x, y = tr_queue.get()
 
                 n_chunks = x.shape[0]
 
@@ -432,7 +412,6 @@ class MusAE:
                         real_gt, fake_gt, dummy_gt,
                         real_gt, fake_gt, dummy_gt,
                         real_gt, real_gt,
-                        label,
                         s_real
                     ]
                 )
@@ -465,45 +444,42 @@ class MusAE:
                 tr_log["infomax_accuracy"].append(aae_loss[55])
 
                 if pbc_tr % 500 == 0:
-                    print("\nPlotting stats...")
-                    print("Regularisation weight:", k.get_value(self.regularisation_weight))
+                    log.info("Plotting stats...")
+                    log.info("Regularisation weight:", k.get_value(self.regularisation_weight))
                     h.plot(paths["plots"], tr_log)
 
                 if pbc_tr % 5000 == 0:
-                    print("\nSaving checkpoint...")
+                    log.info("\nSaving checkpoint...")
                     self.save_checkpoint(paths["checkpoints"], pbc_tr)
 
                 # annealing the regularisation part
                 if pbc_tr > 1000 and not annealing_first_stage:
                     k.set_value(self.regularisation_weight, 0.0)
-                    print("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
+                    log.info("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
                     annealing_first_stage = True
                 elif pbc_tr > 10000 and not annealing_second_stage:
                     k.set_value(self.regularisation_weight, 0.1)
-                    print("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
+                    log.info("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
                     annealing_second_stage = True
                 elif pbc_tr > 15000 and not annealing_third_stage:
                     k.set_value(self.regularisation_weight, 0.2)
-                    print("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
+                    log.info("Regularisation weight annealed to ", k.get_value(self.regularisation_weight))
                     annealing_third_stage = True
 
                 pbc += 1
                 pbc_tr += 1
+
             # at the end of each epoch, we evaluate on the validation set
-            print("Generating validation batches...")
             vl_queue = Queue(maxsize=128)
 
             def async_batch_generator_vl():
-                # training_set = dataset.generate_batches(pianorolls_path, tr_set, batch_size=self.batch_size)
-                vl_batches = range(self.len_vl_set)
-                for i in vl_batches:
-                    # tr_queue.put(dataset.preprocess(next(training_set)), block=True)
-                    vl_queue.put(dataset.select_batch(i), block=True)
+                for batch in test_batches:
+                    vl_queue.put(batch)
 
             validation_batch_thread = threading.Thread(target=async_batch_generator_vl)
             validation_batch_thread.start()
 
-            print("\nEvaluating on validation set...")
+            log.info("Evaluating on validation set...")
             # evaluating on validation set
 
             vl_log_tmp = {
@@ -515,11 +491,8 @@ class MusAE:
                 "VL_infomax_accuracy": []
             }
 
-            for _ in range(self.len_vl_set):
-                # try:
-                x, y, label = vl_queue.get(block=True)
-                label = label[:, :self.s_length]
-                # print("batch get")
+            for _ in range(len_test_set):
+                x, y = vl_queue.get()
 
                 n_chunks = x.shape[0]
 
@@ -547,7 +520,6 @@ class MusAE:
                         real_gt, fake_gt, dummy_gt,
                         real_gt, fake_gt, dummy_gt,
                         real_gt, real_gt,
-                        label,
                         s_real
                     ]
                 )
@@ -562,7 +534,7 @@ class MusAE:
                 pbc += 1
                 pbc_vl += 1
 
-            print("Saving validation accuracy...")
+            log.info("Saving validation accuracy...")
             vl_log["epoch"].append(epoch)
             vl_log["VL_AE_accuracy_drums"].append(np.array(vl_log_tmp["VL_AE_accuracy_drums"]).mean())
             vl_log["VL_AE_accuracy_bass"].append(np.array(vl_log_tmp["VL_AE_accuracy_bass"]).mean())

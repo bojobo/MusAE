@@ -1,5 +1,39 @@
+import os
+from os import path as p
+
 from keras import backend as k
 from keras.optimizers import Adam
+import helper as h
+
+###################################################################################################
+#                                     Basic Directories                                           #
+###################################################################################################
+resources_path = p.abspath(p.join(p.dirname(__file__), '..', 'res'))
+log_path = p.abspath(p.join(p.dirname(__file__), '..', 'log'))
+unzip_path = p.abspath(p.join(resources_path, 'unzip'))
+batches_path = p.abspath(p.join(resources_path, 'batches'))
+
+out_path = p.abspath(p.join(p.dirname(__file__), '..', 'out'))
+plots_path = p.abspath(p.join(out_path, 'plots'))
+
+# Create directories if they do not exist
+h.create_dirs(resources_path)
+h.create_dirs(out_path)
+# unzip_path is created while extracting
+h.create_dirs(log_path)
+h.create_dirs(batches_path)
+h.create_dirs(plots_path)
+
+zip_path = p.abspath(p.join(resources_path, 'dataset.zip'))
+training_samples = p.abspath(p.join(resources_path, 'training_samples.p'))
+test_samples = p.abspath(p.join(resources_path, 'test_samples.p'))
+training_batches = p.abspath(p.join(resources_path, 'training_batches.p'))
+test_batches = p.abspath(p.join(resources_path, 'test_batches.p'))
+
+###################################################################################################
+#                                    Training parameters                                          #
+###################################################################################################
+batch_size = 256
 
 model_params = {
     "infomax_net_params": {
@@ -29,10 +63,9 @@ model_params = {
     },
     "z_length": 512,
     "s_length": 32,  # max is 32
-    "name": "MusAE_4_Intel"
 }
 
-preprocessing = False
+preprocessing = True
 learning_rate = 1e-5  # K.variable(1e-4)
 
 preprocessing_params = {
@@ -72,7 +105,6 @@ general_params = {
     "checkpoints_path": "./out/checkpoints/",
     "plots_path": "./out/plots",
     "preprocessed_midi_path": "./preprocessed_midi/",
-    "dataset_path": "./dataset_16bar_intel/",
     "autoencoded_path": "./out/autoencoded/",
     "interpolations_path": "./out/interpolation/",
     "sampled_path": "./out/sampled/",
@@ -80,6 +112,11 @@ general_params = {
     "latent_sweeps_path": "./out/latent_sweeps/",
     "sweep_extreme": 10,  # used in save_z_latents_sweep
     "sweep_granularity": 9,  # used in save_z_latents_sweep
+    "resources_path": p.abspath(p.join(p.dirname(__file__), '..', 'res')),
+    "logs_path": p.abspath(p.join(p.dirname(__file__), '..', 'log')),
+    "dataset_path": p.abspath(p.join(p.dirname(__file__), '..', 'res', "dataset")),
+    "zip_path": p.abspath(p.join(p.dirname(__file__), '..', 'res', "dataset.zip")),
+    "unzip_path": p.abspath(p.join(p.dirname(__file__), '..', 'res', "unzip"))
 }
 
 label_permutation = [14, 29, 26, 4, 19, 10, 13, 23, 17, 2, 31, 18, 1, 3, 15, 9, 0, 21, 27, 8, 11, 20, 30, 12, 7, 6, 24,
