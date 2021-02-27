@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 import config as cfg
 from dataset import MidiDataset
 from train import MusAE
+import tensorflow as tf
 
 # Initialize a global logger
 log.basicConfig(
@@ -19,7 +20,8 @@ log.basicConfig(
     level=log.INFO)
 
 if __name__ == '__main__':
-    log.info("Started initialization...")
+    log.info("Using GPU: {}".format(tf.test.is_gpu_available()))
+    log.info("Initializing...")
     # Check if our training and test samples have already been created.
     # If not, create them
     if (not os.path.exists(cfg.training_samples)) | (not os.path.exists(cfg.test_samples)):

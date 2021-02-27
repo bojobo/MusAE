@@ -1,10 +1,7 @@
 import itertools
-import json
 import logging as log
 import os
-import pprint
 import random
-from collections import Counter
 from typing import List
 
 import numpy as np
@@ -16,8 +13,6 @@ import config as cfg
 from config import midi_params
 
 log.getLogger(__name__)
-
-pp = pprint.PrettyPrinter(indent=4)
 
 
 def get_chunks(samples: List[pproll.Multitrack], n: int) -> List[List[pproll.Multitrack]]:
@@ -50,58 +45,6 @@ def get_instruments(song: pproll.Multitrack) -> [list, list, list, list]:
 
 def check_four_fourth(song: pm.PrettyMIDI):
     return all([tmp.numerator == 4 and tmp.denominator == 4 for tmp in song.time_signature_changes])
-
-
-def count_genres(dataset_path, max_genres):
-    # max_pbc = sum([len(files) for _, _, files in os.walk(os.path.join(dataset_path, "songs"))])
-    # assign unique id for each song of dataset
-    print("Extracting real song names...")
-    pbc = 0
-    counter = Counter()
-    for path, subdirs, files in os.walk(os.path.join(dataset_path, "songs")):
-        for song in files:
-            pbc += 1
-
-            song_number = song.split(".")[0]
-
-            with open(os.path.join(dataset_path, "metadata", song_number + ".json")) as metadata_fp:
-                metadata = json.load(metadata_fp)
-
-            counter.update(metadata["genres"])
-
-    print("Genres found:")
-    pp.pprint(counter.most_common(max_genres))
-
-    with open(os.path.join(dataset_path, "genre_counter.json"), "w") as fp:
-        json.dump(counter.most_common(max_genres), fp)
-
-    genres_list = [x[0] for x in list(counter.most_common(max_genres))]
-
-    if not os.path.exists(os.path.join(dataset_path, "labels")):
-        os.makedirs(os.path.join(dataset_path, "labels"))
-
-    # now generate labels information (S latents)
-    print("Generating labels information...")
-    pbc = 0
-    for path, subdirs, files in os.walk(os.path.join(dataset_path, "songs")):
-        for song in files:
-            pbc += 1
-
-            song_number = song.split(".")[0]
-
-            with open(os.path.join(dataset_path, "metadata", song_number + ".json")) as metadata_fp:
-                metadata = json.load(metadata_fp)
-
-            # setting corresponding tags
-            label = np.zeros(max_genres)
-            for genre in metadata["genres"]:
-                try:
-                    idx = genres_list.index(genre)
-                    label[idx] = 1
-                except ValueError:
-                    pass
-
-            np.save(os.path.join(dataset_path, "labels", song_number), label)
 
 
 class MidiDataset:
