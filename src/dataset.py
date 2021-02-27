@@ -180,10 +180,10 @@ class MidiDataset:
             instruments = get_instruments(base_song)
 
             # Save count for statistics
-            piano_count += instruments[0]
-            strings_count += instruments[1]
-            ensemble_count += instruments[2]
-            others_count += instruments[3]
+            piano_count += 1 if instruments[0] else 0
+            strings_count += 1 if instruments[1] else 0
+            ensemble_count += 1 if instruments[2] else 0
+            others_count += 1 if instruments[3] else 0
 
             # Check if there are any instruments that we classify as others
             if instruments[3]:
