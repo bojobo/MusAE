@@ -24,7 +24,7 @@ if __name__ == '__main__':
     log.info("Initializing...")
     # Check if our training and test samples have already been created.
     # If not, create them
-    if (not os.path.exists(cfg.training_samples)) | (not os.path.exists(cfg.test_samples)):
+    if (not os.path.exists(cfg.training_batches)) | (not os.path.exists(cfg.test_batches)):
         log.info("Extracting " + cfg.zip_path + "...")
         with zf.ZipFile(cfg.zip_path, 'r') as z:
             z.extractall(cfg.unzip_path)
@@ -42,7 +42,6 @@ if __name__ == '__main__':
 
         log.info("Creating training samples...")
         samples = d.create_samples(training_songs)
-        # pickle.dump(samples, open(cfg.training_samples, 'wb'))
         log.info("Creating training batches...")
         pickle.dump(d.create_batches(samples), open(cfg.training_batches, 'wb'))
 
@@ -50,7 +49,6 @@ if __name__ == '__main__':
 
         log.info("Creating test samples...")
         samples = d.create_samples(test_songs)
-        # pickle.dump(samples, open(cfg.test_samples, 'wb'))
         log.info("Creating test batches...")
         pickle.dump(d.create_batches(samples), open(cfg.test_batches, 'wb'))
         del samples
