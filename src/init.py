@@ -5,12 +5,12 @@ import zipfile as zf
 from datetime import datetime as dt
 from os import path as p
 
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 import config as cfg
 from dataset import MidiDataset
 from train import MusAE
-import tensorflow as tf
 
 # Initialize a global logger
 log.basicConfig(

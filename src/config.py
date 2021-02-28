@@ -4,6 +4,7 @@ from keras import backend as k
 from keras.optimizers import Adam
 
 import helper as h
+import multiprocessing as mp
 
 ###################################################################################################
 #                                     Basic Directories                                           #
@@ -29,6 +30,8 @@ training_samples = p.abspath(p.join(resources_path, 'training_samples.p'))
 test_samples = p.abspath(p.join(resources_path, 'test_samples.p'))
 training_batches = p.abspath(p.join(resources_path, 'training_batches.p'))
 test_batches = p.abspath(p.join(resources_path, 'test_batches.p'))
+
+processes = mp.cpu_count()
 
 ###################################################################################################
 #                                    Training parameters                                          #

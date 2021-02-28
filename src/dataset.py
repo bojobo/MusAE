@@ -1,5 +1,6 @@
 import itertools
 import logging as log
+import multiprocessing as mp
 import os
 import random
 from typing import List
@@ -79,27 +80,33 @@ class MidiDataset:
         batches_x = []
         batches_y = []
 
-        for i, batch in enumerate(batches):
-            dest = []
-            for sample in batch:
-                dest.append(sample.get_stacked_pianoroll())
-            dest = np.array(dest)
-            x, y = self.preprocess(dest)
-            batches_x.append(x)
-            batches_y.append(y)
+        chunksize = int(len(batches) / cfg.processes) + 1
+        with mp.Pool(processes=cfg.processes) as pool:
+            for res in pool.imap_unordered(iterable=batches, func=self._process_batch, chunksize=chunksize):
+                batches_x.append(res[0])
+                batches_y.append(res[1])
+            pool.close()
+            pool.join()
+
         return [batches_x, batches_y]
+
+    def _process_batch(self, batch: List[pproll.Multitrack]):
+        dest = []
+        for sample in batch:
+            dest.append(sample.get_stacked_pianoroll())
+        dest = np.array(dest)
+        x, y = self.preprocess(dest)
+        return x, y
 
     def preprocess(self, x: np.ndarray) -> [np.ndarray, np.ndarray]:
         # if silent timestep (all 0), then set silent note to 1, else set
         # silent note to 0
-        def pad_with(vector, pad_width):
+        def pad_with(vector, pad_width, iaxis, kwargs):
             # if no padding, skip directly
             if pad_width[0] == 0 and pad_width[1] == 0:
                 return vector
             else:
-
                 if all(vector[pad_width[0]:-pad_width[1]] == 0):
-
                     pad_value = 1
                 else:
                     pad_value = 0
@@ -112,7 +119,7 @@ class MidiDataset:
 
         # converting to categorical (keep only one note played at a time)
         tracks = []
-        for t in range(self.n_tracks):
+        for t in range(x.shape[-1]):
             x_t = x[:, :, :, t]
             x_t = to_categorical(x_t.argmax(2), num_classes=self.n_cropped_notes)
             x_t = np.expand_dims(x_t, axis=-1)
@@ -154,119 +161,34 @@ class MidiDataset:
         others_count = 0
 
         samples = []
-        yeah = 0
-        for count, song in enumerate(songs):
-            if (count + 1) % 1000 == 0:
-                log.info("Processed {} songs...".format(count))
-            try:
-                pretty_midi = pm.PrettyMIDI(song)
-            except:
-                count_exceptions += 1
-                continue
+        # for count, song in enumerate(songs):
 
-            if not check_four_fourth(pretty_midi):
-                count_wrong_time_signature += 1
-                continue
-
-            del pretty_midi
-
-            try:
-                base_song = pproll.parse(song)
-            except:
-                count_exceptions += 1
-                continue
-
-            # Divide the songs in piano, string, ensemble and others
-            instruments = get_instruments(base_song)
-
-            # Save count for statistics
-            piano_count += 1 if instruments[0] else 0
-            strings_count += 1 if instruments[1] else 0
-            ensemble_count += 1 if instruments[2] else 0
-            others_count += 1 if instruments[3] else 0
-
-            # Check if there are any instruments that we classify as others
-            if instruments[3]:
-                # If so, merge all these tracks into one
-                base_song.merge_tracks(instruments[3], mode="max", program=57, name="Other", remove_merged=True)
-                # Restore the order destroyed by the merging
-                instruments = get_instruments(base_song)
-
-            # Song has to have at least one piano, string, and ensemble track
-            if (not instruments[0]) | (not instruments[1]) | (not instruments[2]):
-                continue
-            count_fulfills_requirements += 1
-            instruments = list(itertools.product(*instruments))
-
-            # Generate all combinations of our given tracks
-            for i in instruments:
-                song = pproll.Multitrack()
-                song.remove_empty_tracks()
-
-                for t in i:
-                    song.append_track(
-                        pianoroll=base_song.tracks[t].pianoroll,
-                        program=base_song.tracks[t].program,
-                        is_drum=base_song.tracks[t].is_drum,
-                        name=base_song.tracks[t].name
-                    )
-                song.beat_resolution = base_song.beat_resolution
-                song.tempo = base_song.tempo
-
-                song.binarize()
-                song.assign_constant(1)
-
-                # Check that no track is empty for the whole song
-                if song.get_empty_tracks():
-                    continue
-
-                pianoroll = song.get_stacked_pianoroll()
-
-                i = 0
-                while i + self.phrase_size <= pianoroll.shape[0]:
-                    window = pianoroll[i:i + self.phrase_size, :, :]
-                    # print("window from", i, "to", i+self.phrase_size)
-
-                    # keep only the phrases that have at most one bar of consecutive silence
-                    # for each track
-                    bar_of_silences = np.array([0] * self.n_tracks)
-                    for track in range(self.n_tracks):
-                        j = 0
-                        while j + self.bar_size <= window.shape[0]:
-                            if window[j:j + self.bar_size, :, track].sum() == 0:
-                                bar_of_silences[track] += 1
-
-                            j += 1  # self.bar_size
-
-                    # if the phrase is good, let's store it
-                    if not any(bar_of_silences > 0):
-                        # data augmentation, random transpose bar
-                        for shift in np.random.choice([-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6], 1,
-                                                      replace=False):
-                            tmp = pproll.Multitrack()
-                            tmp.remove_empty_tracks()
-                            for track in range(self.n_tracks):
-                                tmp.append_track(
-                                    pianoroll=window[:, :, track],
-                                    program=song.tracks[track].program,
-                                    name=cfg.instrument_names[song.tracks[track].program],
-                                    is_drum=song.tracks[track].is_drum
-                                )
-
-                            tmp.beat_resolution = 4
-                            tmp.tempo = song.tempo
-                            tmp.name = str(yeah)
-
-                            tmp.transpose(shift)
-                            tmp.check_validity()
-                            samples.append(tmp)
-                            # tmp.save(os.path.join(pianorolls_path, str(yeah) + ".npz"))
-                            del tmp
-                            yeah += 1
-
-                    i += self.bar_size
-                del song
-            del base_song
+        count = 0
+        chunksize = int(len(songs) / cfg.processes) + 1
+        with mp.Pool(processes=cfg.processes) as pool:
+            for res in pool.imap_unordered(iterable=songs, func=self._create_sample, chunksize=chunksize):
+                count += 1
+                if count % 1000 == 0:
+                    log.info("Processed {} songs...".format(count))
+                if res:
+                    if res[0]:
+                        count_exceptions += res[0]
+                        continue
+                    if res[1]:
+                        count_wrong_time_signature += res[1]
+                        continue
+                    if len(res[3]) > 1:
+                        samples.extend(res[2])
+                        count_fulfills_requirements += 1
+                        samples.extend(res[2])
+                        piano_count += res[3][0]
+                        strings_count += res[3][1]
+                        ensemble_count += res[3][2]
+                        others_count += res[3][3]
+                    else:
+                        continue
+            pool.close()
+            pool.join()
 
         log.warning("{} songs have thrown an exception!".format(count_exceptions))
         log.warning("{} songs have the wrong time signature!".format(count_wrong_time_signature))
@@ -275,5 +197,119 @@ class MidiDataset:
         log.info("{} songs had at least one ensemble track.".format(ensemble_count))
         log.info("{} songs had at least one others track.".format(others_count))
         log.info("{} have at least one piano, string, and ensemble track.".format(count_fulfills_requirements))
-        log.info("Out of the remaining songs, {} samples have been create and saved to.".format(len(samples)))
+        log.info("Out of the remaining songs, {} samples have been created.".format(len(samples)))
         return samples
+
+    def _create_sample(self, song_path: str) -> [bool, bool, bool, List[pproll.Multitrack], List[int]]:
+        """
+
+        :param song:
+        :return: exception, wrong time signature, does not fulfill requirements, samples
+        """
+        try:
+            pretty_midi = pm.PrettyMIDI(song_path)
+        except:
+            return True, False, [], []
+
+        if not check_four_fourth(pretty_midi):
+            return False, True, [], []
+
+        del pretty_midi
+
+        try:
+            base_song = pproll.parse(song_path)
+        except:
+            return True, False, [], []
+
+        # Divide the songs in piano, string, ensemble and others
+        instruments = get_instruments(base_song)
+
+        # Check if there are any instruments that we classify as others
+        if instruments[3]:
+            # If so, merge all these tracks into one
+            base_song.merge_tracks(instruments[3], mode="max", program=57, name="Other", remove_merged=True)
+            # Restore the order destroyed by the merging
+            instruments = get_instruments(base_song)
+
+        tracks = [bool(instruments[0]), bool(instruments[1]), bool(instruments[2]), bool(instruments[3])]
+
+        # Remove instruments, which are not present in the song
+        instruments = [instrument for instrument in instruments if instrument]
+
+        if len(instruments) < 2:
+            return False, False, [], []
+
+        combinations = list(itertools.product(*instruments))
+
+        # Generate all combinations of our given tracks
+        yeah = 0
+        samples = []
+        for i in combinations:
+            song = pproll.Multitrack()
+            song.remove_empty_tracks()
+
+            for t in i:
+                song.append_track(
+                    pianoroll=base_song.tracks[t].pianoroll,
+                    program=base_song.tracks[t].program,
+                    is_drum=base_song.tracks[t].is_drum,
+                    name=base_song.tracks[t].name
+                )
+            song.beat_resolution = base_song.beat_resolution
+            song.tempo = base_song.tempo
+
+            song.binarize()
+            song.assign_constant(1)
+
+            # Check that no track is empty for the whole song
+            if song.get_empty_tracks():
+                continue
+
+            pianoroll = song.get_stacked_pianoroll()
+
+            i = 0
+            while i + self.phrase_size <= pianoroll.shape[0]:
+                window = pianoroll[i:i + self.phrase_size, :, :]
+                # print("window from", i, "to", i+self.phrase_size)
+
+                # keep only the phrases that have at most one bar of consecutive silence
+                # for each track
+                bar_of_silences = np.array([0] * len(song.tracks))
+                for track in range(len(song.tracks)):
+                    j = 0
+                    while j + self.bar_size <= window.shape[0]:
+                        if window[j:j + self.bar_size, :, track].sum() == 0:
+                            bar_of_silences[track] += 1
+
+                        j += 1  # self.bar_size
+
+                # if the phrase is good, let's store it
+                if not any(bar_of_silences > 0):
+                    # data augmentation, random transpose bar
+                    for shift in np.random.choice([-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6], 1,
+                                                  replace=False):
+                        tmp = pproll.Multitrack()
+                        tmp.remove_empty_tracks()
+                        for track in range(len(song.tracks)):
+                            tmp.append_track(
+                                pianoroll=window[:, :, track],
+                                program=song.tracks[track].program,
+                                name=cfg.instrument_names[song.tracks[track].program],
+                                is_drum=song.tracks[track].is_drum
+                            )
+
+                        tmp.beat_resolution = 4
+                        tmp.tempo = song.tempo
+                        tmp.name = "{}_{}".format(song_path.split("\\")[-1], yeah)
+
+                        tmp.transpose(shift)
+                        tmp.check_validity()
+                        samples.append(tmp)
+                        # self.preprocess(np.array(tmp.get_stacked_pianoroll()))
+                        del tmp
+                        yeah += 1
+
+                i += self.bar_size
+            del song
+        del base_song
+        return False, False, samples, tracks
