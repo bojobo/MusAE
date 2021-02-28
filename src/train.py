@@ -14,7 +14,7 @@ from keras import backend as k
 from keras.layers import Concatenate
 from keras.layers import Input
 from keras.models import Model
-from keras.utils import plot_model
+# from keras.utils import plot_model
 
 import config as cfg
 import decoders
@@ -65,11 +65,11 @@ class MusAE:
         path = os.path.join(cfg.plots_path, self.name, "models")
         h.create_dirs(path)
 
-        log.info("Saving model plots..")
-        plot_model(self.encoder, os.path.join(path, "encoder.png"), show_shapes=True)
-        plot_model(self.decoder, os.path.join(path, "decoder.png"), show_shapes=True)
-        plot_model(self.z_discriminator, os.path.join(path, "z_discriminator.png"), show_shapes=True)
-        plot_model(self.s_discriminator, os.path.join(path, "s_discriminator.png"), show_shapes=True)
+        # log.info("Saving model plots..")
+        # plot_model(self.encoder, os.path.join(path, "encoder.png"), show_shapes=True)
+        # plot_model(self.decoder, os.path.join(path, "decoder.png"), show_shapes=True)
+        # plot_model(self.z_discriminator, os.path.join(path, "z_discriminator.png"), show_shapes=True)
+        # plot_model(self.s_discriminator, os.path.join(path, "s_discriminator.png"), show_shapes=True)
         # plot_model(self.infomax_net, os.path.join(path, "infomax_net.png"), show_shapes=True)
 
         # -------------------------------
@@ -92,7 +92,7 @@ class MusAE:
             outputs=[y_drums, y_bass, y_guitar, y_strings],
             name="autoencoder"
         )
-        plot_model(self.reconstruction_phase, os.path.join(path, "reconstruction_phase.png"), show_shapes=True)
+        # plot_model(self.reconstruction_phase, os.path.join(path, "reconstruction_phase.png"), show_shapes=True)
 
         # -------------------------------
         # Construct Computational Graph
@@ -119,7 +119,7 @@ class MusAE:
             [z_valid_real, z_valid_fake, z_valid_int, z_int],
             name="z_regularisation_phase"
         )
-        plot_model(self.z_regularisation_phase, os.path.join(path, "z_regularisation_phase.png"), show_shapes=True)
+        # plot_model(self.z_regularisation_phase, os.path.join(path, "z_regularisation_phase.png"), show_shapes=True)
 
         # -------------------------------
         # Construct Computational Graph
@@ -147,7 +147,7 @@ class MusAE:
             [s_valid_real, s_valid_fake, s_valid_int, s_int],
             name="s_regularisation_phase"
         )
-        plot_model(self.s_regularisation_phase, os.path.join(path, "s_regularisation_phase.png"), show_shapes=True)
+        # plot_model(self.s_regularisation_phase, os.path.join(path, "s_regularisation_phase.png"), show_shapes=True)
 
         # -------------------------------
         # Construct Computational Graph
@@ -172,7 +172,7 @@ class MusAE:
             outputs=[s_valid_gen, z_valid_gen],
             name="gen_regularisation_phase"
         )
-        plot_model(self.gen_regularisation_phase, os.path.join(path, "gen_regularisation_phase.png"), show_shapes=True)
+        # plot_model(self.gen_regularisation_phase, os.path.join(path, "gen_regularisation_phase.png"), show_shapes=True)
 
         # -------------------------------
         # Construct Computational Graph
@@ -195,7 +195,7 @@ class MusAE:
             name="supervised_phase"
         )
 
-        plot_model(self.supervised_phase, os.path.join(path, "supervised_phase.png"), show_shapes=True)
+        # plot_model(self.supervised_phase, os.path.join(path, "supervised_phase.png"), show_shapes=True)
 
         log.info("Building infomax phase's computational graph...")
         self.encoder.trainable = True
@@ -221,7 +221,7 @@ class MusAE:
             name="infomax_phase"
         )
 
-        plot_model(self.infomax_phase, os.path.join(path, "infomax_phase.png"), show_shapes=True)
+        # plot_model(self.infomax_phase, os.path.join(path, "infomax_phase.png"), show_shapes=True)
 
         # -------------------------------
         # Construct Computational Graph
@@ -290,7 +290,7 @@ class MusAE:
                 h.output
             ]
         )
-        plot_model(self.adversarial_autoencoder, os.path.join(path, "adversarial_autoencoder.png"), show_shapes=True)
+        # plot_model(self.adversarial_autoencoder, os.path.join(path, "adversarial_autoencoder.png"), show_shapes=True)
 
     def train_v2(self, training_batches: List[list], test_batches: List[list]):
         epsilon_std = cfg.model_params["encoder_params"]["epsilon_std"]
