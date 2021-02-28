@@ -1,9 +1,8 @@
 import itertools
 import logging as log
 import multiprocessing as mp
-import os
 import random
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import numpy as np
 import pretty_midi as pm
@@ -50,21 +49,11 @@ def check_four_fourth(song: pm.PrettyMIDI):
 
 class MidiDataset:
     def __init__(self):
-        # self.dataset_path = cfg.general_params["dataset_path"]
-
         self.n_tracks = midi_params["n_tracks"]
         self.n_midi_programs = midi_params["n_midi_programs"]
         self.n_cropped_notes = midi_params["n_cropped_notes"]
         self.phrase_size = midi_params["phrase_size"]
         self.bar_size = midi_params["bar_size"]
-
-        # Initialize
-
-    def select_batch(self, idx):
-        x = np.load(os.path.join(self.dataset_path, "batches", "X", str(idx) + ".npy"))
-        y = np.load(os.path.join(self.dataset_path, "batches", "Y", str(idx) + ".npy"))
-        label = np.load(os.path.join(self.dataset_path, "batches", "labels", str(idx) + ".npy"))
-        return x, y, label
 
     # warning: tends to use a lot of storage (disk) space
     def create_batches(self, samples: List[pproll.Multitrack], batch_size=cfg.batch_size) -> List[list]:
@@ -161,7 +150,7 @@ class MidiDataset:
 
         with mp.Pool(processes=cfg.processes) as pool:
             for res in pool.imap_unordered(iterable=songs, func=self._filter_out_song, chunksize=chunksize):
-                if not res:
+                if res is not None:
                     usable_songs.append(res)
 
             log.info("{} songs fulfill our requirements".format(len(usable_songs)))
@@ -178,21 +167,21 @@ class MidiDataset:
         log.info("Out of the remaining songs, {} samples have been created.".format(len(samples)))
         return samples
 
-    def _filter_out_song(self, song: str) -> bool:
+    def _filter_out_song(self, song: str) -> Optional[str]:
         try:
             pretty_midi = pm.PrettyMIDI(song)
         except:
-            return True
+            return None
 
         if not check_four_fourth(pretty_midi):
-            return True
+            return None
 
         del pretty_midi
 
         try:
             base_song = pproll.parse(song)
         except:
-            return True
+            return None
 
         # Divide the songs in piano, string, ensemble and others
         instruments = get_instruments(base_song)
@@ -205,8 +194,8 @@ class MidiDataset:
             instruments = get_instruments(base_song)
 
         if len(instruments) != 4:
-            return True
-        return False
+            return None
+        return song
 
     def _create_sample(self, song_path: str) -> List[pproll.Multitrack]:
         base_song = pproll.parse(song_path)

@@ -5,12 +5,11 @@ import zipfile as zf
 from datetime import datetime as dt
 from os import path as p
 
-import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 import config as cfg
 from dataset import MidiDataset
-from train import MusAE
+from model import MusAE_GM
 
 # Initialize a global logger
 log.basicConfig(
@@ -22,8 +21,8 @@ log.basicConfig(
 if __name__ == '__main__':
     log.info("Using GPU: {}".format(tf.test.is_gpu_available()))
     log.info("Initializing...")
-    # Check if our training and test samples have already been created.
-    # If not, create them
+    # # Check if our training and test samples have already been created.
+    # # If not, create them
     if (not os.path.exists(cfg.training_batches)) | (not os.path.exists(cfg.test_batches)):
         log.info("Extracting " + cfg.zip_path + "...")
         with zf.ZipFile(cfg.zip_path, 'r') as z:
@@ -59,7 +58,7 @@ if __name__ == '__main__':
     test_batches = pickle.load(open(cfg.test_batches, 'rb'))
 
     log.info("Initialising MusÆ...")
-    aae = MusAE()
+    aae = MusAE_GM()
 
     log.info("Traingin MusÆ...")
-    aae.train_v2(training_batches, test_batches)
+    aae.train(training_batches, test_batches)

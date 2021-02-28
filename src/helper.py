@@ -16,7 +16,7 @@ class RandomWeightedAverage(_Merge):
 
 
 # Just report the mean output of the model (useful for WGAN)
-def output(y_pred):
+def output(y_true, y_pred):
     return k.mean(y_pred)
 
 
@@ -35,18 +35,11 @@ def create_dirs(path):
 
 
 def precision(y_true):
-    # true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    # predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-    # precision = true_positives / (predicted_positives + K.epsilon())
-    # return precision
     p = as_keras_metric(tf.metrics.precision)
     return p(y_true)
 
 
 def recall(y_true):
-    # true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    # possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-    # recall = true_positives / (possible_positives + K.epsilon())
     r = as_keras_metric(tf.metrics.recall)
     return r(y_true)
 
@@ -57,7 +50,7 @@ def f1_score(y_true):
     return (2 * p * r) / (p + r + k.epsilon())
 
 
-def gradient_penalty_loss(y_pred, averaged_samples):
+def gradient_penalty_loss(self, y_true, y_pred, averaged_samples):
     def _compute_gradients(tensor, var_list):
         grads = tf.gradients(tensor, var_list)
         return [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(var_list, grads)]
