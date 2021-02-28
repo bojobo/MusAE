@@ -80,11 +80,15 @@ class MidiDataset:
         batches_x = []
         batches_y = []
 
-        chunksize = int(len(batches) / cfg.processes) + 1
+        chunksize = ((len(batches) / cfg.processes) / 12) + 1
         with mp.Pool(processes=cfg.processes) as pool:
+            count = 1
             for res in pool.imap_unordered(iterable=batches, func=self._process_batch, chunksize=chunksize):
+                if count % 1000 == 0:
+                    log.info("Processed {} batches...".format(count))
                 batches_x.append(res[0])
                 batches_y.append(res[1])
+                count += 1
             pool.close()
             pool.join()
 
@@ -161,11 +165,9 @@ class MidiDataset:
         others_count = 0
 
         samples = []
-        # for count, song in enumerate(songs):
-
-        count = 0
-        chunksize = int(len(songs) / cfg.processes) + 1
+        chunksize = ((len(songs) / cfg.processes) / 12) + 1
         with mp.Pool(processes=cfg.processes) as pool:
+            count = 0
             for res in pool.imap_unordered(iterable=songs, func=self._create_sample, chunksize=chunksize):
                 count += 1
                 if count % 1000 == 0:
@@ -236,7 +238,7 @@ class MidiDataset:
         # Remove instruments, which are not present in the song
         instruments = [instrument for instrument in instruments if instrument]
 
-        if len(instruments) < 2:
+        if len(instruments) < 4:
             return False, False, [], []
 
         combinations = list(itertools.product(*instruments))

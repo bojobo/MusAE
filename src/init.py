@@ -42,13 +42,15 @@ if __name__ == '__main__':
 
         log.info("Creating training samples...")
         samples = d.create_samples(training_songs)
-        pickle.dump(samples, open(cfg.training_samples, 'wb'))
+        # pickle.dump(samples, open(cfg.training_samples, 'wb'))
         log.info("Creating training batches...")
         pickle.dump(d.create_batches(samples), open(cfg.training_batches, 'wb'))
 
+        del samples
+
         log.info("Creating test samples...")
         samples = d.create_samples(test_songs)
-        pickle.dump(samples, open(cfg.test_samples, 'wb'))
+        # pickle.dump(samples, open(cfg.test_samples, 'wb'))
         log.info("Creating test batches...")
         pickle.dump(d.create_batches(samples), open(cfg.test_batches, 'wb'))
         del samples
