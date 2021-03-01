@@ -5,6 +5,7 @@ import zipfile as zf
 from datetime import datetime as dt
 from os import path as p
 
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 import config as cfg
@@ -60,5 +61,5 @@ if __name__ == '__main__':
     log.info("Initialising MusÆ...")
     aae = MusAE_GM()
 
-    log.info("Traingin MusÆ...")
+    log.info("Training MusÆ...")
     aae.train(training_batches, test_batches)

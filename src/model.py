@@ -43,7 +43,7 @@ class MusAE_GM:
         self.decoder = decoders.build_decoder_z_flat()
 
         log.info("Initialising z discriminator...")
-        self.z_discriminator = discriminators.build_gaussian_mixture_discriminator()
+        self.z_discriminator = discriminators.build_gaussian_discriminator()
 
         # -------------------------------
         # Construct Computational Graph
@@ -74,19 +74,18 @@ class MusAE_GM:
         self.z_discriminator.trainable = True
 
         x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_z_reg")
-        y = Input(shape=(self.s_length,), name="y_reg")
 
         z_real = Input(shape=(self.z_length,), name="z_reg")
         z_fake = self.encoder(x)
 
         z_int = h.RandomWeightedAverage(name="weighted_avg_z")([z_real, z_fake])
 
-        z_valid_real = self.z_discriminator([z_real, y])
-        z_valid_fake = self.z_discriminator([z_fake, y])
-        z_valid_int = self.z_discriminator([z_int, y])
+        z_valid_real = self.z_discriminator(z_real)
+        z_valid_fake = self.z_discriminator(z_fake)
+        z_valid_int = self.z_discriminator(z_int)
 
         self.z_regularisation_phase = Model(
-            [z_real, x, y],
+            [z_real, x],
             [z_valid_real, z_valid_fake, z_valid_int, z_int],
             name="z_regularisation_phase"
         )
@@ -101,13 +100,12 @@ class MusAE_GM:
         self.z_discriminator.trainable = False
 
         x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_gen_reg")
-        y = Input(shape=(self.s_length,), name="y_gen_reg")
 
         z_gen = self.encoder(x)
-        z_valid_gen = self.z_discriminator([z_gen, y])
+        z_valid_gen = self.z_discriminator(z_gen)
 
         self.gen_regularisation_phase = Model(
-            inputs=[x, y],
+            inputs=x,
             outputs=z_valid_gen,
             name="gen_regularisation_phase"
         )
@@ -122,15 +120,14 @@ class MusAE_GM:
         self.z_discriminator.trainable = True
 
         x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X")
-        y = Input(shape=(self.s_length,), name="y")
         z_real = Input(shape=(self.z_length,), name="z")
 
         y_piano, y_strings, y_ensemble, y_others = self.reconstruction_phase(x)
-        z_valid_real, z_valid_fake, z_valid_int, z_int = self.z_regularisation_phase([z_real, x, y])
-        z_valid_gen = self.gen_regularisation_phase([x, y])
+        z_valid_real, z_valid_fake, z_valid_int, z_int = self.z_regularisation_phase([z_real, x])
+        z_valid_gen = self.gen_regularisation_phase(x)
 
         self.adversarial_autoencoder = Model(
-            inputs=[z_real, x, y],
+            inputs=[z_real, x],
             outputs=[
                 y_piano, y_strings, y_ensemble, y_others,
                 z_valid_real, z_valid_fake, z_valid_int,

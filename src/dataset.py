@@ -72,7 +72,7 @@ class MidiDataset:
         with mp.Pool(processes=cfg.processes) as pool:
             count = 1
             for res in pool.imap_unordered(iterable=batches, func=self._process_batch, chunksize=chunksize):
-                if count % 1000 == 0:
+                if count % chunksize == 0:
                     log.info("Processed {} batches...".format(count))
                 batches_x.append(res[0])
                 batches_y.append(res[1])
@@ -160,7 +160,7 @@ class MidiDataset:
                 count += 1
                 if count % chunksize == 0:
                     log.info("Processed {} songs...".format(count))
-            samples.extend(res)
+                samples.extend(res)
             pool.close()
             pool.join()
 
@@ -198,7 +198,7 @@ class MidiDataset:
         return song
 
     def _create_sample(self, song_path: str) -> List[pproll.Multitrack]:
-        base_song = pproll.parse(song_path)
+        base_song = pproll.parse(song_path, beat_resolution=4)
         instruments = get_instruments(base_song)
         combinations = list(itertools.product(*instruments))
 
@@ -261,12 +261,11 @@ class MidiDataset:
 
                         tmp.beat_resolution = 4
                         tmp.tempo = song.tempo
-                        tmp.name = "{}_{}".format(song_path.split("\\")[-1], yeah)
+                        tmp.name = "{}_{}".format(song_path.split("\\")[-1].split(".mid")[0], yeah)
 
                         tmp.transpose(shift)
                         tmp.check_validity()
                         samples.append(tmp)
-                        # self.preprocess(np.array(tmp.get_stacked_pianoroll()))
                         del tmp
                         yeah += 1
 
