@@ -15,6 +15,7 @@ batches_path = p.abspath(p.join(resources_path, 'batches'))
 
 out_path = p.abspath(p.join(p.dirname(__file__), '..', 'out'))
 plots_path = p.abspath(p.join(out_path, 'plots'))
+checkpoints_path = p.abspath(p.join(out_path, 'checkpoints'))
 
 # Create directories if they do not exist
 h.create_dirs(resources_path)

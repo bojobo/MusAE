@@ -165,17 +165,31 @@ class MusAE_GM:
         epsilon_std = cfg.model_params["encoder_params"]["epsilon_std"]
         # create checkpoint and plots folder
         paths = {
-            "checkpoints": os.path.join(cfg.general_params["checkpoints_path"], self.name),
+            "checkpoints": os.path.join(cfg.checkpoints_path, self.name),
             "plots": os.path.join(cfg.plots_path, self.name),
         }
         for key in paths:
             h.create_dirs(paths[key])
 
+        # Remove empty batches
+        training_batches = [batch for batch in training_batches if batch]
+        test_batches = [batch for batch in test_batches if batch]
+        # Workaround for too big of a batch size
+        tr_batch_x = []
+        tr_batch_y = []
+        for batch in training_batches:
+            tr_batch_x.extend(batch[0])
+            tr_batch_y.extend(batch[1])
+        # We have 497 songs, so create 71 batches
+        training_batches = []
+        for i in range(0, len(tr_batch_x), 71):
+            training_batches.append([tr_batch_x[i:i + 71], tr_batch_y[i:i + 71]])
+
         len_tr_set = len(training_batches)
         len_vl_set = len(test_batches)
 
-        print("Number of TR batches:", len_tr_set)
-        print("Number of VL batches:", len_vl_set)
+        log.info("Number of TR batches {} with {} songs each.".format(len_tr_set, len(training_batches[0])))
+        log.info("Number of VL batches {} with {} songs each.".format(len_vl_set, len(test_batches[0])))
 
         # storing losses over time
         tr_log = {
