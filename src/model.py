@@ -56,11 +56,11 @@ class MusAE_GM:
 
         x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X_recon")
         z_recon = self.encoder(x)
-        y_piano, y_strings, y_ensemble, y_others = self.decoder(z_recon)
+        y_piano, y_others = self.decoder(z_recon)
 
         self.reconstruction_phase = Model(
             inputs=x,
-            outputs=[y_piano, y_strings, y_ensemble, y_others],
+            outputs=[y_piano, y_others],
             name="autoencoder"
         )
 
@@ -122,35 +122,33 @@ class MusAE_GM:
         x = Input(shape=(self.phrase_size, self.n_cropped_notes, self.n_tracks), name="X")
         z_real = Input(shape=(self.z_length,), name="z")
 
-        y_piano, y_strings, y_ensemble, y_others = self.reconstruction_phase(x)
+        y_piano, y_others = self.reconstruction_phase(x)
         z_valid_real, z_valid_fake, z_valid_int, z_int = self.z_regularisation_phase([z_real, x])
         z_valid_gen = self.gen_regularisation_phase(x)
 
         self.adversarial_autoencoder = Model(
             inputs=[z_real, x],
             outputs=[
-                y_piano, y_strings, y_ensemble, y_others,
+                y_piano, y_others,
                 z_valid_real, z_valid_fake, z_valid_int,
                 z_valid_gen
             ],
             name="adversarial_autoencoder"
         )
 
-        y_pred = [y_piano, y_strings, y_ensemble, y_others]
+        y_pred = [y_piano, y_others]
 
         z_gp_loss = partial(h.gradient_penalty_loss, y_pred=y_pred, averaged_samples=z_int)
         z_gp_loss.__name__ = "gradient_penalty_z"
 
         self.adversarial_autoencoder.compile(
             loss=[
-                "categorical_crossentropy", "categorical_crossentropy", "categorical_crossentropy",
-                "categorical_crossentropy",
+                "categorical_crossentropy", "categorical_crossentropy",
                 h.wasserstein_loss, h.wasserstein_loss, z_gp_loss,
                 h.wasserstein_loss
             ],
             loss_weights=[
-                self.reconstruction_weight, self.reconstruction_weight, self.reconstruction_weight,
-                self.reconstruction_weight,
+                self.reconstruction_weight, self.reconstruction_weight,
                 self.regularisation_weight, self.regularisation_weight, self.regularisation_weight * self.z_lambda,
                 self.regularisation_weight
             ],
