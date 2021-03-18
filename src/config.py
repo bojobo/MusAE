@@ -1,3 +1,6 @@
+import shutil
+import tempfile as tmp
+from enum import Enum, auto
 from os import path as p
 
 from keras import backend as k
@@ -5,13 +8,26 @@ from keras.optimizers import Adam
 
 import helper as h
 
+
+class Exceptions(Enum):
+    EXCEPTION_PARSING_PRETTY_MIDI = auto()
+    EXCPETION_PARSING_PYPIANOROLL = auto()
+    WRONG_TIME_SIGNATURE = auto()
+    WRONG_TRACK_COUNT = auto()
+
+
 ###################################################################################################
 #                                     Basic Directories                                           #
 ###################################################################################################
+pianorolls_path = p.abspath(p.join(tmp.gettempdir(), 'pianorolls'))
+samples_path = p.abspath(p.join(tmp.gettempdir(), 'samples'))
+batches_path = p.abspath(p.join(tmp.gettempdir(), 'batches'))
+unzip_path = p.abspath(p.join(tmp.gettempdir(), 'unzip'))
+
 resources_path = p.abspath(p.join(p.dirname(__file__), '..', 'res'))
 log_path = p.abspath(p.join(p.dirname(__file__), '..', 'log'))
-unzip_path = p.abspath(p.join(resources_path, 'unzip'))
-batches_path = p.abspath(p.join(resources_path, 'batches'))
+x_path = p.abspath(p.join(batches_path, 'x'))
+y_path = p.abspath(p.join(batches_path, 'y'))
 
 out_path = p.abspath(p.join(p.dirname(__file__), '..', 'out'))
 plots_path = p.abspath(p.join(out_path, 'plots'))
@@ -24,14 +40,28 @@ h.create_dirs(out_path)
 h.create_dirs(log_path)
 h.create_dirs(batches_path)
 h.create_dirs(plots_path)
+h.create_dirs(pianorolls_path)
+h.create_dirs(samples_path)
+h.create_dirs(x_path)
+h.create_dirs(y_path)
 
 zip_path = p.abspath(p.join(resources_path, 'dataset.zip'))
-training_samples = p.abspath(p.join(resources_path, 'training_samples.p'))
-test_samples = p.abspath(p.join(resources_path, 'test_samples.p'))
-training_batches = p.abspath(p.join(resources_path, 'training_batches.p'))
-test_batches = p.abspath(p.join(resources_path, 'test_batches.p'))
 
 processes = 12
+preprocess = True
+beat_resolution = 4
+
+
+def get_chunksize(iterable: list) -> int:
+    return int((len(iterable) / processes) / processes) + 1
+
+
+def cleanup():
+    shutil.rmtree(pianorolls_path)
+    shutil.rmtree(samples_path)
+    shutil.rmtree(batches_path)
+    shutil.rmtree(unzip_path)
+
 
 ###################################################################################################
 #                                    Training parameters                                          #
@@ -71,11 +101,6 @@ model_params = {
 preprocessing = True
 learning_rate = 1e-5  # K.variable(1e-4)
 
-preprocessing_params = {
-    "prep_batch_size": 128,
-    "prep_dataset_name": ""
-}
-
 training_params = {
     "batch_size": 16,
     "test_size": 0.2,
@@ -101,7 +126,7 @@ midi_params = {
     "subphrase_size": 4 * 4 * 1,  # beat resolution * beat in bar * bar in low phrase
     "bar_size": 4 * 4,  # beat resolution * beat in bar
     "beat_resolution": 4,
-    "n_tracks": 4
+    "n_tracks": 2
 }
 
 general_params = {
@@ -114,16 +139,8 @@ general_params = {
     "style_transfers_path": "./out/style_transfers/",
     "latent_sweeps_path": "./out/latent_sweeps/",
     "sweep_extreme": 10,  # used in save_z_latents_sweep
-    "sweep_granularity": 9,  # used in save_z_latents_sweep
-    "resources_path": p.abspath(p.join(p.dirname(__file__), '..', 'res')),
-    "logs_path": p.abspath(p.join(p.dirname(__file__), '..', 'log')),
-    "dataset_path": p.abspath(p.join(p.dirname(__file__), '..', 'res', "dataset")),
-    "zip_path": p.abspath(p.join(p.dirname(__file__), '..', 'res', "dataset.zip")),
-    "unzip_path": p.abspath(p.join(p.dirname(__file__), '..', 'res', "unzip"))
+    "sweep_granularity": 9  # used in save_z_latents_sweep
 }
-
-label_permutation = [14, 29, 26, 4, 19, 10, 13, 23, 17, 2, 31, 18, 1, 3, 15, 9, 0, 21, 27, 8, 11, 20, 30, 12, 7, 6, 24,
-                     22, 16, 5, 28, 25]
 
 # ------------------------------------
 # Additional stuff

@@ -4,12 +4,12 @@ import json
 import logging as log
 import os
 from functools import partial
-from typing import List
 
 import numpy as np
 from keras import backend as k
 from keras.layers import Input
 from keras.models import Model
+from sklearn.model_selection import train_test_split
 
 import config as cfg
 import decoders
@@ -161,7 +161,7 @@ class MusAE_GM:
             ]
         )
 
-    def train(self, training_batches: List[list], test_batches: List[list]):
+    def train(self):
         epsilon_std = cfg.model_params["encoder_params"]["epsilon_std"]
         # create checkpoint and plots folder
         paths = {
@@ -172,24 +172,12 @@ class MusAE_GM:
             h.create_dirs(paths[key])
 
         # Remove empty batches
-        training_batches = [batch for batch in training_batches if batch]
-        test_batches = [batch for batch in test_batches if batch]
-        # Workaround for too big of a batch size
-        tr_batch_x = []
-        tr_batch_y = []
-        for batch in training_batches:
-            tr_batch_x.extend(batch[0])
-            tr_batch_y.extend(batch[1])
-        # We have 497 songs, so create 71 batches
-        training_batches = []
-        for i in range(0, len(tr_batch_x), 71):
-            training_batches.append([tr_batch_x[i:i + 71], tr_batch_y[i:i + 71]])
+        # training_batches = [batch for batch in training_batches if batch]
+        # test_batches = [batch for batch in test_batches if batch]
 
-        len_tr_set = len(training_batches)
-        len_vl_set = len(test_batches)
+        batch_x = [file for _, _, files in os.walk(cfg.x_path) for file in files]
 
-        log.info("Number of TR batches {} with {} songs each.".format(len_tr_set, len(training_batches[0])))
-        log.info("Number of VL batches {} with {} songs each.".format(len_vl_set, len(test_batches[0])))
+        tr_batches, vl_batches = train_test_split(batch_x, shuffle=True, train_size=0.8)
 
         # storing losses over time
         tr_log = {
@@ -229,8 +217,9 @@ class MusAE_GM:
             log.info("Epoch", epoch + 1, "of", self.n_epochs)
             log.info("Training on training set...")
             # train on the training set
-            for batch in training_batches:
-                x, y = batch
+            for batch in tr_batches:
+                x = np.load(os.path.join(cfg.x_path, batch))
+                y = np.load(os.path.join(cfg.y_path, batch))
 
                 n_chunks = x.shape[0]
 
@@ -310,8 +299,9 @@ class MusAE_GM:
                 "VL_AE_accuracy_strings": [],
             }
 
-            for batch in test_batches:
-                x, y = batch
+            for batch in vl_batches:
+                x = np.load(os.path.join(cfg.x_path, batch))
+                y = np.load(os.path.join(cfg.y_path, batch))
 
                 n_chunks = x.shape[0]
 
