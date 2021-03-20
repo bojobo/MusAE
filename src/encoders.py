@@ -4,23 +4,22 @@ from keras.layers import Lambda
 from keras.layers import Reshape
 from keras.models import Model
 
-import config
+import midi_cfg
+import model_cfg
 
 
 def build_encoder_z():
-    x_depth = config.model_params["encoder_params"]["X_depth"]
-    x_size = config.model_params["encoder_params"]["X_size"]
-    epsilon_std = config.model_params["encoder_params"]["epsilon_std"]
-    phrase_size = config.midi_params["phrase_size"]
-    n_cropped_notes = config.midi_params["n_cropped_notes"]
-    n_tracks = config.midi_params["n_tracks"]
-    z_length = config.model_params["z_length"]
+    x_depth = model_cfg.EncoderParams.x_depth
+    x_size = model_cfg.EncoderParams.x_size
+    epsilon_std = model_cfg.EncoderParams.epsilon_std
+    phrase_size = midi_cfg.phrase_size
+    z_length = model_cfg.z_length
 
-    x = Input(shape=(phrase_size, n_cropped_notes, n_tracks), name="X")
+    x = Input(shape=(phrase_size, midi_cfg.n_cropped_notes, midi_cfg.n_tracks), name="X")
     encoder_inputs = x
 
     # X encoder
-    h_x = Reshape((phrase_size, n_tracks * n_cropped_notes), name="reshape_X")(x)
+    h_x = Reshape((phrase_size, midi_cfg.n_tracks * midi_cfg.n_cropped_notes), name="reshape_X")(x)
     for i in range(x_depth - 1):
         h_x = Bidirectional(
             CuDNNLSTM(x_size, return_sequences=True, name=f"rec_X_{i}"),

@@ -1,11 +1,14 @@
 import functools
 import os
+import shutil
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from keras import backend as k
 from keras.layers.merge import _Merge
+
+import config as cfg
 
 
 class RandomWeightedAverage(_Merge):
@@ -89,3 +92,14 @@ def plot(path, log):
         plt.ylabel(key)
 
         plt.savefig(os.path.join(path, key))
+
+
+def get_chunksize(iterable: list) -> int:
+    return int((len(iterable) / cfg.processes) / cfg.processes) + 1
+
+
+def cleanup():
+    shutil.rmtree(cfg.Paths.pianorolls)
+    shutil.rmtree(cfg.Paths.samples)
+    shutil.rmtree(cfg.Paths.batches)
+    shutil.rmtree(cfg.Paths.unzip)

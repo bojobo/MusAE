@@ -3,17 +3,18 @@ from keras.layers import Input, Dense, CuDNNLSTM
 from keras.layers import RepeatVector, TimeDistributed
 from keras.models import Model
 
-import config
+import midi_cfg
+import model_cfg
 
 
 # flat version
 def build_decoder_z_flat():
-    x_high_depth = config.model_params["decoder_params"]["X_high_depth"]
-    x_high_size = config.model_params["decoder_params"]["X_high_size"]
-    phrase_size = config.midi_params["phrase_size"]
-    n_cropped_notes = config.midi_params["n_cropped_notes"]
-    n_tracks = config.midi_params["n_tracks"]
-    z_length = config.model_params["z_length"]
+    x_high_depth = model_cfg.DecoderParams.x_high_depth
+    x_high_size = model_cfg.DecoderParams.x_high_size
+    phrase_size = midi_cfg.phrase_size
+    n_cropped_notes = midi_cfg.n_cropped_notes
+    n_tracks = midi_cfg.n_tracks
+    z_length = model_cfg.z_length
 
     z = Input(shape=(z_length,), name="z")
     decoder_inputs = z

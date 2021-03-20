@@ -1,18 +1,18 @@
 import logging as log
 import os
-import zipfile as zf
-from datetime import datetime as dt
+import shutil
 from os import path as p
 
 import tensorflow as tf
 
 import config as cfg
+import helper as h
 from dataset import MidiDataset
 from model import MusAE_GM
 
 # Initialize a global logger
 log.basicConfig(
-    filename=os.path.join(cfg.log_path, dt.now().strftime("%d-%m-%Y_%H.%M.%S") + ".txt"),
+    filename=cfg.Resources.log_txt,
     format='%(levelname)s:  %(name)s:   %(asctime)s:    %(message)s',
     filemode='w',
     level=log.INFO)
@@ -23,11 +23,10 @@ if __name__ == '__main__':
     # # Check if our training and test samples have already been created.
     # # If not, create them
     if cfg.preprocess:
-        log.info("Extracting {} to {}...".format(cfg.zip_path, cfg.unzip_path))
-        with zf.ZipFile(cfg.zip_path, 'r') as z:
-            z.extractall(cfg.unzip_path)
+        log.info("Extracting {} to {}...".format(cfg.Resources.dataset_zip, cfg.Paths.unzip))
+        shutil.unpack_archive(cfg.Resources.dataset_zip, cfg.Paths.unzip)
         songs = []
-        for path, _, files in os.walk(cfg.unzip_path):
+        for path, _, files in os.walk(cfg.Paths.unzip):
             for file in files:
                 if not file.endswith(".mid"):
                     os.remove(p.join(path, file))
@@ -55,4 +54,4 @@ if __name__ == '__main__':
     log.info("Training MusÆ...")
     aae.train()
 
-    cfg.cleanup()
+    h.cleanup()
