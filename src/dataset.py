@@ -225,6 +225,9 @@ class MidiDataset:
 
             for j in range(midi_cfg.phrase_size, pianoroll.shape[0] + 1, midi_cfg.phrase_size):
                 window = pianoroll[j:j + midi_cfg.phrase_size, :, :]
+
+                if window.shape[0] != midi_cfg.phrase_size:
+                    continue
                 # print("window from", i, "to", i+self.phrase_size)
 
                 # keep only the phrases that have at most one bar of consecutive silence
