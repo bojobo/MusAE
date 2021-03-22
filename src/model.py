@@ -9,6 +9,7 @@ import numpy as np
 from keras import backend as k
 from keras.layers import Input
 from keras.models import Model
+from keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
 
 import config as cfg
@@ -146,12 +147,14 @@ class MusAE_GM:
                 regularisation_weight, regularisation_weight, regularisation_weight * training_cfg.z_lambda,
                 regularisation_weight
             ],
-            optimizer=training_cfg.aae_optim,
+            optimizer=Adam(1e-5, clipnorm=1., clipvalue=.5),
             metrics=[
                 "categorical_accuracy",
                 h.output
             ]
         )
+
+        print(self.adversarial_autoencoder.metrics_names)
 
     def train(self):
         epsilon_std = model_cfg.EncoderParams.epsilon_std
@@ -190,7 +193,7 @@ class MusAE_GM:
         annealing_second_stage = False
         annealing_third_stage = False
         for epoch in range(training_cfg.n_epochs):
-            log.info("Epoch", epoch + 1, "of", training_cfg.n_epochs)
+            log.info("Epoch {} of {}".format(epoch + 1, training_cfg.n_epochs))
             log.info("Training on training set...")
             # train on the training set
             for batch in tr_batches:
@@ -223,14 +226,14 @@ class MusAE_GM:
                 tr_log["AE_loss_others"].append(aae_loss[2])
                 tr_log["AE_loss_tot"].append(np.array([aae_loss[1], aae_loss[2]]).mean())
 
-                tr_log["AE_accuracy_piano"].append(aae_loss[4])
-                tr_log["AE_accuracy_others"].append(aae_loss[5])
-                tr_log["AE_accuracy_tot"].append(np.array([aae_loss[9], aae_loss[15]]).mean())
+                tr_log["AE_accuracy_piano"].append(aae_loss[7])
+                tr_log["AE_accuracy_others"].append(aae_loss[9])
+                tr_log["AE_accuracy_tot"].append(np.array([aae_loss[7], aae_loss[9]]).mean())
 
-                tr_log["z_score_real"].append(aae_loss[18])
-                tr_log["z_score_fake"].append(aae_loss[20])
-                tr_log["z_gradient_penalty"].append(aae_loss[22])
-                tr_log["gen_score"].append(aae_loss[24])
+                tr_log["z_score_real"].append(aae_loss[12])
+                tr_log["z_score_fake"].append(aae_loss[14])
+                tr_log["z_gradient_penalty"].append(aae_loss[16])
+                tr_log["gen_score"].append(aae_loss[18])
 
                 if pbc_tr % 500 == 0:
                     log.info("Plotting stats...")
@@ -262,10 +265,8 @@ class MusAE_GM:
             # evaluating on validation set
 
             vl_log_tmp = {
-                "VL_AE_accuracy_drums": [],
-                "VL_AE_accuracy_bass": [],
-                "VL_AE_accuracy_guitar": [],
-                "VL_AE_accuracy_strings": [],
+                "VL_AE_accuracy_piano": [],
+                "VL_AE_accuracy_others": []
             }
 
             for batch in vl_batches:
@@ -293,23 +294,18 @@ class MusAE_GM:
                     ]
                 )
 
-                vl_log_tmp["VL_AE_accuracy_drums"].append(aae_loss[9])
-                vl_log_tmp["VL_AE_accuracy_bass"].append(aae_loss[11])
-                vl_log_tmp["VL_AE_accuracy_guitar"].append(aae_loss[13])
-                vl_log_tmp["VL_AE_accuracy_strings"].append(aae_loss[15])
+                vl_log_tmp["VL_AE_accuracy_piano"].append(aae_loss[7])
+                vl_log_tmp["VL_AE_accuracy_others"].append(aae_loss[9])
 
                 pbc += 1
                 pbc_vl += 1
 
             log.info("Saving validation accuracy...")
             vl_log["epoch"].append(epoch)
-            vl_log["VL_AE_accuracy_drums"].append(np.array(vl_log_tmp["VL_AE_accuracy_drums"]).mean())
-            vl_log["VL_AE_accuracy_bass"].append(np.array(vl_log_tmp["VL_AE_accuracy_bass"]).mean())
-            vl_log["VL_AE_accuracy_guitar"].append(np.array(vl_log_tmp["VL_AE_accuracy_guitar"]).mean())
-            vl_log["VL_AE_accuracy_strings"].append(np.array(vl_log_tmp["VL_AE_accuracy_strings"]).mean())
-            vl_log["VL_AE_accuracy_tot"].append(np.array(
-                [vl_log["VL_AE_accuracy_drums"], vl_log["VL_AE_accuracy_bass"], vl_log["VL_AE_accuracy_guitar"],
-                 vl_log["VL_AE_accuracy_strings"]]).mean())
+            vl_log["VL_AE_accuracy_piano"].append(np.array(vl_log_tmp["VL_AE_accuracy_drums"]).mean())
+            vl_log["VL_AE_accuracy_others"].append(np.array(vl_log_tmp["VL_AE_accuracy_bass"]).mean())
+            vl_log["VL_AE_accuracy_tot"].append(
+                np.array([vl_log["VL_AE_accuracy_piano"], vl_log["VL_AE_accuracy_others"]]).mean())
 
             with open(os.path.join(cfg.Paths.plots, "log.json"), 'w') as f:
                 json.dump(str(vl_log), f)
