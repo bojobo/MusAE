@@ -154,8 +154,6 @@ class MusAE_GM:
             ]
         )
 
-        print(self.adversarial_autoencoder.metrics_names)
-
     def train(self):
         epsilon_std = model_cfg.EncoderParams.epsilon_std
         regularisation_weight = training_cfg.regularisation_weight
@@ -302,8 +300,8 @@ class MusAE_GM:
 
             log.info("Saving validation accuracy...")
             vl_log["epoch"].append(epoch)
-            vl_log["VL_AE_accuracy_piano"].append(np.array(vl_log_tmp["VL_AE_accuracy_drums"]).mean())
-            vl_log["VL_AE_accuracy_others"].append(np.array(vl_log_tmp["VL_AE_accuracy_bass"]).mean())
+            vl_log["VL_AE_accuracy_piano"].append(np.array(vl_log_tmp["VL_AE_accuracy_piano"]).mean())
+            vl_log["VL_AE_accuracy_others"].append(np.array(vl_log_tmp["VL_AE_accuracy_others"]).mean())
             vl_log["VL_AE_accuracy_tot"].append(
                 np.array([vl_log["VL_AE_accuracy_piano"], vl_log["VL_AE_accuracy_others"]]).mean())
 
