@@ -14,3 +14,4 @@ Either use the dockerfile ''dockerfile_sem'' or manually install the following p
 - pypianoroll 0.5.3
 - pretty_midi
 - sklearn
+- h5py 2.10.0
