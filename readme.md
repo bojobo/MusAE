@@ -5,13 +5,13 @@ For explicit samples of interpolation please check the repo this one has been fo
 
 ## Installation/Dependencies
 
-The code works with Python 3.6. Other versions have not been tested (yet)
+The code works with Python 3.7 (3.6 is not supported due to @dataclass being used in the various config files). Other versions have not been tested (yet)
 
 Either use the dockerfile ''dockerfile_sem'' or manually install the following packages:
 - Tensorflow 1.15.0 (either with or without GPU support, you're free to choose)
 - Keras 2.2.4
 - matplotlib
-- pypianoroll 0.5.3
+- pypianoroll 1.0.4
 - pretty_midi
 - sklearn
 - h5py 2.10.0
