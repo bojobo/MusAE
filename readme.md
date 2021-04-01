@@ -15,3 +15,4 @@ Either use the dockerfile ''dockerfile_sem'' or manually install the following p
 - pretty_midi
 - sklearn
 - h5py 2.10.0
+- pandas
