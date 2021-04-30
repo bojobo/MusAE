@@ -1,14 +1,20 @@
 import functools
+import logging as log
 import os
 import shutil
+import time
+from glob import glob
+from typing import List, Sized
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from keras import backend as k
+import tensorflow.keras.backend as k
 from keras.layers.merge import _Merge
 
 import config as cfg
+
+log.getLogger(__name__)
 
 
 class RandomWeightedAverage(_Merge):
@@ -81,7 +87,7 @@ def as_keras_metric(method):
     return wrapper
 
 
-def plot(path, log):
+def plot(log):
     for key, vals in log.items():
         xs = list(range(len(vals)))
         ys = vals
@@ -91,15 +97,8 @@ def plot(path, log):
         plt.xlabel('iteration')
         plt.ylabel(key)
 
-        plt.savefig(os.path.join(path, key))
+        plt.savefig(os.path.join(cfg.Paths.plots, key))
 
 
-def get_chunksize(iterable: list) -> int:
+def get_chunksize(iterable: Sized) -> int:
     return int((len(iterable) / cfg.processes) / cfg.processes) + 1
-
-
-def cleanup():
-    shutil.rmtree(cfg.Paths.pianorolls)
-    shutil.rmtree(cfg.Paths.samples)
-    shutil.rmtree(cfg.Paths.batches)
-    shutil.rmtree(cfg.Paths.unzip)
