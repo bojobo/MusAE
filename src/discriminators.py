@@ -5,7 +5,7 @@ import model_cfg
 
 
 class GaussianDiscriminator(Model):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         z = Input(shape=(model_cfg.z_length,), name="z")
         h = z
         for i in range(model_cfg.ZDiscriminatorParams.fc_depth):

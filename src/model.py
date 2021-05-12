@@ -48,7 +48,7 @@ class MusAE_GM:
         self.decoder.trainable = True
         z_discriminator.trainable = False
 
-        x = Input(shape=(phrase_size, midi_cfg.n_cropped_notes, midi_cfg.n_tracks), name="X_recon")
+        x = Input(shape=(midi_cfg.n_tracks, phrase_size, midi_cfg.n_cropped_notes), name="X_recon")
         z_recon = self.encoder(x)
         decoder_output = self.decoder(z_recon)
 
@@ -67,7 +67,7 @@ class MusAE_GM:
         self.decoder.trainable = False
         z_discriminator.trainable = True
 
-        x = Input(shape=(phrase_size, midi_cfg.n_cropped_notes, midi_cfg.n_tracks), name="X_z_reg")
+        x = Input(shape=(midi_cfg.n_tracks, phrase_size, midi_cfg.n_cropped_notes), name="X_z_reg")
 
         z_real = Input(shape=(model_cfg.z_length,), name="z_reg")
         z_fake = self.encoder(x)
@@ -93,7 +93,7 @@ class MusAE_GM:
         self.decoder.trainable = False
         z_discriminator.trainable = False
 
-        x = Input(shape=(phrase_size, midi_cfg.n_cropped_notes, midi_cfg.n_tracks), name="X_gen_reg")
+        x = Input(shape=(midi_cfg.n_tracks, phrase_size, midi_cfg.n_cropped_notes), name="X_gen_reg")
 
         z_gen = self.encoder(x)
         z_valid_gen = z_discriminator(z_gen)
@@ -113,7 +113,7 @@ class MusAE_GM:
         self.decoder.trainable = True
         z_discriminator.trainable = True
 
-        x = Input(shape=(phrase_size, midi_cfg.n_cropped_notes, midi_cfg.n_tracks), name="X")
+        x = Input(shape=(midi_cfg.n_tracks, phrase_size, midi_cfg.n_cropped_notes), name="X")
         z_real = Input(shape=(model_cfg.z_length,), name="z")
 
         reconstruction_output = reconstruction_phase(x)
@@ -121,7 +121,10 @@ class MusAE_GM:
         z_valid_gen = self.gen_regularisation_phase(x)
 
         outputs = []
-        outputs.extend(reconstruction_output)
+        if isinstance(reconstruction_output, list):
+            outputs.extend(reconstruction_output)
+        else:
+            outputs.append(reconstruction_output)
         outputs.extend([z_valid_real, z_valid_fake, z_valid_int, z_valid_gen])
         self.adversarial_autoencoder = Model(
             inputs=[z_real, x],
@@ -146,8 +149,8 @@ class MusAE_GM:
             loss_weights=loss_weights,
             optimizer=Adam(1e-5, clipnorm=1., clipvalue=.5),
             metrics=[
-                "categorical_accuracy",
-                h.output
+                "binary_accuracy",
+                # h.output
             ]
         )
         log.info(" - Done!")
@@ -157,17 +160,10 @@ class MusAE_GM:
         log.info("Found {} batches.".format(len(batches)))
         tr_batches, vl_batches = train_test_split(batches, shuffle=True, train_size=0.8)
 
-        log.info("Batches list: {}".format(batches))
-        batch = np.load(batches[0])
-        log.info("x shape = {}".format(batch['x'].shape))
-        log.info("y shape = {}".format(batch['y'].shape))
-
         # storing losses over time
         tr_log = {}
         for i in range(1, midi_cfg.n_tracks + 1):
             tr_log[f"TR_Loss_Track_{i}"] = []
-        for key in ["TR_Loss_Total", "Z_Score_Real", "Z_Score_Fake", "Z_Score_Penalty", "Gen_Score"]:
-            tr_log[key] = []
         tr_log["TR_Loss_Total"] = []
 
         vl_log = {}
@@ -198,8 +194,8 @@ class MusAE_GM:
                     tr_log[f"TR_Loss_Track_{i}"].append(loss)
                 tr_log["TR_Loss_Total"].append(sum_loss / midi_cfg.n_tracks)
 
-                for i, key in enumerate(["Z_Score_Real", "Z_Score_Fake", "Z_Score_Penalty", "Gen_Score"]):
-                    tr_log[key].append(training_loss[6 + 2 * midi_cfg.n_tracks + (i * 2)])
+                # for i, key in enumerate(["Z_Score_Real", "Z_Score_Fake", "Z_Score_Penalty", "Gen_Score"]):
+                #     tr_log[key].append(training_loss[6 + 2 * midi_cfg.n_tracks + (i * 2)])
 
             # at the end of each epoch, we evaluate on the validation set
             log.info(" - Evaluating on validation set...")
@@ -209,10 +205,10 @@ class MusAE_GM:
                 vl_log_tmp = {}
                 for i in range(1, midi_cfg.n_tracks + 1):
                     vl_log_tmp[f"VL_Accuracy_Track_{i}"] = []
-                for i in range(1, midi_cfg.n_tracks + 1):
+                for i in range(0, midi_cfg.n_tracks):
                     # Collect all accuracy values
                     loss = validation_loss[5 + midi_cfg.n_tracks + (i * 2)]
-                    vl_log_tmp[f"VL_Accuracy_Track_{i}"].append(loss)
+                    vl_log_tmp[f"VL_Accuracy_Track_{i + 1}"].append(loss)
                 for i in range(1, midi_cfg.n_tracks + 1):
                     # Calculate the mean accuracy for each track
                     mean_loss = mean(vl_log_tmp[f"VL_Accuracy_Track_{i}"])
@@ -244,7 +240,7 @@ class MusAE_GM:
 
             aae_y = []
             for i in range(midi_cfg.n_tracks):
-                aae_y.append(y[:, :, :, i])
+                aae_y.append(y[:, i, :, :])
             aae_y.extend([real_gt, fake_gt, dummy_gt, real_gt])
 
             if not validation:

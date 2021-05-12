@@ -9,8 +9,8 @@ import model_cfg
 
 
 class EncoderZ(Model):
-    def __init__(self):
-        x = Input(shape=(midi_cfg.phrase_size, midi_cfg.n_cropped_notes, midi_cfg.n_tracks), name="X")
+    def __init__(self, *args, **kwargs):
+        x = Input(shape=(midi_cfg.n_tracks, midi_cfg.phrase_size, midi_cfg.n_cropped_notes), name="X")
 
         h_x = Reshape((midi_cfg.phrase_size, midi_cfg.n_tracks * midi_cfg.n_cropped_notes), name="reshape_X")(x)
         for i in range(model_cfg.EncoderParams.x_depth - 1):

@@ -1,10 +1,7 @@
 import functools
 import logging as log
 import os
-import shutil
-import time
-from glob import glob
-from typing import List, Sized
+from typing import Sized
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -97,7 +94,7 @@ def plot(log):
         plt.xlabel('iteration')
         plt.ylabel(key)
 
-        plt.savefig(os.path.join(cfg.Paths.plots, key))
+        plt.savefig(os.path.join(cfg.Paths.plots, f"{cfg.Resources.dataset_name}_{key}.jpg"))
 
 
 def get_chunksize(iterable: Sized) -> int:

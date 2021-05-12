@@ -7,7 +7,7 @@ import model_cfg
 
 
 class DecoderZFlat(Model):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         z = Input(shape=(model_cfg.z_length,), name="z")
         init_state = Dense(model_cfg.DecoderParams.x_high_size, activation="tanh", name="hidden_state_init")(z)
 
