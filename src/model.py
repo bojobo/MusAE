@@ -156,7 +156,7 @@ class MusAE_GM:
         log.info(" - Done!")
 
     def train(self):
-        batches = glob(cfg.Paths.musae + "/**/batch[0-9]*.npz", recursive=True)
+        batches = glob(cfg.Paths.batches + "/batch[0-9]*.npz")
         log.info("Found {} batches.".format(len(batches)))
         tr_batches, vl_batches = train_test_split(batches, shuffle=True, train_size=0.8)
 

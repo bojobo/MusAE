@@ -11,6 +11,7 @@ class Exceptions(Enum):
     EXCEPTION_PARSING_PRETTY_MIDI = auto()
     EXCEPTION_PARSING_PYPIANOROLL = auto()
     WRONG_TRACK_COUNT = auto()
+    WRONG_SIGNATURE = auto()
 
 
 class Paths:
@@ -26,6 +27,7 @@ class Paths:
     plots = p.join(out, 'plots')
     checkpoints = p.join(out, 'checkpoints')
     generated = p.join(out, 'generated')
+    latent_space = p.join(plots, 'latent_space')
 
     b_samples = p.join(out, 'samples')
     b_batches = p.join(out, 'batches')
@@ -41,11 +43,12 @@ class Paths:
     h.create_dirs(plots)
     h.create_dirs(checkpoints)
     h.create_dirs(generated)
+    h.create_dirs(latent_space)
 
 
 class Resources:
-    dataset_name = "kunstderfuge_filtered.zip"
-    dataset_zip = p.join(Paths.resources, dataset_name)
+    dataset_name = "kunstderfuge"
+    dataset_zip = p.join(Paths.resources, f"{dataset_name}.zip")
     log_txt = p.join(Paths.log, "{}.txt".format(dt.now().strftime("%d-%m-%Y_%H.%M.%S")))
     best_encoder = p.join(Paths.checkpoints, f"{dataset_name}_best_encoder.h5")
     best_decoder = p.join(Paths.checkpoints, f"{dataset_name}_best_decoder.h5")

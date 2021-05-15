@@ -5,6 +5,7 @@ from glob import glob
 from typing import List, Optional
 
 import numpy as np
+import pretty_midi
 import pypianoroll as pproll
 from keras.utils import to_categorical
 
@@ -17,6 +18,7 @@ log.getLogger(__name__)
 
 def create_samples(pool: mp.Pool, midis: List[str]) -> List[str]:
     wrong_track_count = 0
+    wrong_signature_count = 0
 
     cs = h.get_chunksize(midis)
     log.info(f"Creating samples out of {len(midis)} songs and saving them to {cfg.Paths.samples}...")
@@ -25,17 +27,24 @@ def create_samples(pool: mp.Pool, midis: List[str]) -> List[str]:
     for res in pool.imap_unordered(iterable=midis, func=_create_sample, chunksize=cs):
         if res is cfg.Exceptions.WRONG_TRACK_COUNT:
             wrong_track_count += 1
+        if res is cfg.Exceptions.WRONG_SIGNATURE:
+            wrong_signature_count += 1
     log.info(f" - {wrong_track_count} songs have a wrong track count.")
-    samples = glob(cfg.Paths.musae + "/**/*sample*.npz", recursive=True)
+    log.info(f" - {wrong_signature_count} songs have a wrong signature and/or at least one signature change")
+    samples = glob(cfg.Paths.samples + "/*sample*.npz")
     log.info(f" - {len(samples)} samples created.")
     return samples
 
 
 def _create_sample(song: str) -> Optional[cfg.Exceptions]:
-    name = song.split("\\")[-1].split(".mid")[0]
+    name = os.path.split(song)[-1].split(".mid")[0]
+    # name = song.split(os.sep)[-1].split(".mid")[0]
     name = name.split("(")[0]
-    song = pproll.read(path=song, resolution=midi_cfg.resolution)
-    song.name = name
+    pm = pretty_midi.PrettyMIDI(song)
+    for sig_change in pm.time_signature_changes:
+        if not (sig_change.numerator == 4 and sig_change.denominator == 4):
+            return cfg.Exceptions.WRONG_SIGNATURE
+    song = pproll.from_pretty_midi(midi=pm, resolution=midi_cfg.resolution)
     tracks = get_instruments(song)
 
     if not tracks:
@@ -62,26 +71,26 @@ def _create_sample(song: str) -> Optional[cfg.Exceptions]:
 
             # keep only the phrases that have at most one bar of consecutive silence
             # for each track
-            bar_of_silences = np.array([0] * midi_cfg.n_tracks)
-            for track in range(midi_cfg.n_tracks):
-                for k in range(0, window.shape[1] + 1, midi_cfg.bar_size):
-                    if window[track, k:k + midi_cfg.bar_size, :].sum() == 0:
-                        bar_of_silences[track] += 1
+            # bar_of_silences = np.array([0] * midi_cfg.n_tracks)
+            # for track in range(midi_cfg.n_tracks):
+            #     for k in range(0, window.shape[1] + 1, midi_cfg.bar_size):
+            #         if window[track, k:k + midi_cfg.bar_size, :].sum() == 0:
+            #             bar_of_silences[track] += 1
 
             # if the phrase is good, let's store it
-            if not any(bar_of_silences > 1):
-                # data augmentation, random transpose bar
-                shift = np.random.choice([-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6])
-                tracks = []
-                for track in range(midi_cfg.n_tracks):
-                    tracks.append(pproll.StandardTrack(pianoroll=window[track, :, :], is_drum=mt.tracks[track].is_drum))
-                tmp = pproll.Multitrack(tracks=tracks)
+            # if not any(bar_of_silences > 1):
+            # data augmentation, random transpose bar
+            shift = np.random.choice([-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6])
+            tracks = []
+            for track in range(midi_cfg.n_tracks):
+                tracks.append(pproll.StandardTrack(pianoroll=window[track, :, :], is_drum=mt.tracks[track].is_drum))
+            tmp = pproll.Multitrack(tracks=tracks)
 
-                tmp.transpose(shift)
-                path = os.path.join(cfg.Paths.samples, f"{name}_sample_{sample_count}.npz")
-                np.savez_compressed(path, sample=tmp.stack())
-                del tmp
-                sample_count += 1
+            tmp.transpose(shift)
+            path = os.path.join(cfg.Paths.samples, f"{name}_sample_{sample_count}.npz")
+            np.savez_compressed(path, sample=tmp.stack())
+            del tmp
+            sample_count += 1
 
 
 def create_batches(pool: mp.Pool, samples: List[str], batch_size=cfg.batch_size) -> List[str]:
@@ -96,17 +105,47 @@ def create_batches(pool: mp.Pool, samples: List[str], batch_size=cfg.batch_size)
     return glob(cfg.Paths.musae + "/**/batch[0-9]*.npz", recursive=True)
 
 
-def _process_batch(batch: List[str], name) -> int:
+def _process_batch(batch: List[str], name):
     dest = []
     for sample in batch:
         with np.load(sample) as npz:
             dest.append(npz['sample'])
     dest = np.array(dest)
-    preprocess(dest, name)
-    return 1
+    preprocess_batch(dest, name)
 
 
-def preprocess(dest, name: int) -> [np.ndarray, np.ndarray]:
+def preprocess_single(sample) -> [np.ndarray]:
+    x = sample.astype("float64")
+    x = np.pad(x, ((0, 0), (0, 0), (0, 2)))
+
+    # Add silent note
+    for track in range(x.shape[0]):
+        for ts in range(0, x.shape[1]):
+            if all(x[track, ts, :-2] == 0):
+                x[track, ts, -2] = 1
+
+    # converting to categorical (keep only one note played at a time)
+    tracks = []
+    for t in range(midi_cfg.n_tracks):
+        x_t = x[t, :, :]
+        x_t = to_categorical(x_t.argmax(1), num_classes=midi_cfg.n_cropped_notes)
+        x_t = np.expand_dims(x_t, axis=0)
+
+        tracks.append(x_t)
+
+    x = np.concatenate(tracks, axis=0)
+
+    for track in range(x.shape[0]):
+        for ts in range(0, x.shape[1]):
+            if (ts > 0) and np.array_equal(x[track, ts, :-1], x[track, ts - 1, :-1]):
+                x[track, ts, -1] = 1
+                x[track, ts, :-1] = 0
+    x = x.reshape((1, 1, midi_cfg.phrase_size, 128))
+
+    return x
+
+
+def preprocess_batch(dest, name: int) -> [np.ndarray, np.ndarray]:
     x = dest.astype("float64")
     x = np.pad(x, ((0, 0), (0, 0), (0, 0), (0, 2)))
 
@@ -139,7 +178,7 @@ def preprocess(dest, name: int) -> [np.ndarray, np.ndarray]:
     y = x.copy()
     x[np.equal(x, 0)] = -1
 
-    np.savez_compressed(os.path.join(cfg.Paths.batches, "batch{}".format(name)), x=x, y=y)
+    np.savez_compressed(os.path.join(cfg.Paths.batches, f"batch{name}"), x=x, y=y)
 
     del x, y
 
