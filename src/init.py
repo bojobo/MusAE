@@ -69,6 +69,7 @@ def _generate_samples(decoder: k.Model):
 
 
 def _reconstruct():
+    log.info("Choosing a random sample and autoencoding it...")
     samples = glob(cfg.Paths.samples + "/*sample*.npz")
     sample = np.random.choice(samples)
     sample = np.load(sample)
@@ -83,7 +84,6 @@ def _reconstruct():
     song = song.set_nonzeros(1)
     pproll.write(multitrack=song, path=os.path.join(cfg.Paths.generated, "original.mid"))
 
-    sample = sample.reshape((1, 1, midi_cfg.phrase_size, 128))
     sample = dataset.preprocess_single(sample)
     e = best_encoder.predict(sample)
     d = best_decoder.predict(e)
@@ -114,7 +114,6 @@ def _visualize():
             m.write(f"{composer}\n")
             npz = np.load(sample)
             npz = npz['sample']
-            npz = npz.reshape((1, 1, midi_cfg.phrase_size, 128))
             npz = dataset.preprocess_single(npz)
             encoding = best_encoder.predict(npz)
             vecs.append(np.squeeze(encoding))

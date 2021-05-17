@@ -135,12 +135,18 @@ def preprocess_single(sample) -> [np.ndarray]:
 
     x = np.concatenate(tracks, axis=0)
 
+    # Add held note
     for track in range(x.shape[0]):
-        for ts in range(0, x.shape[1]):
-            if (ts > 0) and np.array_equal(x[track, ts, :-1], x[track, ts - 1, :-1]):
+        for ts in range(1, x.shape[1]):
+            if np.array_equal(x[track, ts, :-1], x[track, ts - 1, :-1]):
                 x[track, ts, -1] = 1
+
+    # Zero the pianoroll, where there is a held note
+    for track in range(x.shape[0]):
+        for ts in range(1, x.shape[1]):
+            if x[track, ts, -1] == 1:
                 x[track, ts, :-1] = 0
-    x = x.reshape((1, 1, midi_cfg.phrase_size, 128))
+    x = x.reshape((1, 1, midi_cfg.phrase_size, 130))
 
     return x
 
@@ -167,13 +173,19 @@ def preprocess_batch(dest, name: int) -> [np.ndarray, np.ndarray]:
 
     x = np.concatenate(tracks, axis=1)
 
+    # Add held note
     for sample in range(x.shape[0]):
         for track in range(x.shape[1]):
-            for ts in range(0, x.shape[2]):
-                if (ts > 0) and np.array_equal(x[sample, track, ts, :-1], x[sample, track, ts - 1, :-1]):
+            for ts in range(1, x.shape[2]):
+                if np.array_equal(x[sample, track, ts, :-1], x[sample, track, ts - 1, :-1]):
                     x[sample, track, ts, -1] = 1
-                    x[sample, track, ts, :-1] = 0
 
+    # Zero the pianoroll, where there is a held note
+    for sample in range(x.shape[0]):
+        for track in range(x.shape[1]):
+            for ts in range(1, x.shape[2]):
+                if x[sample, track, ts, -1] == 1:
+                    x[sample, track, ts, :-1] = 0
     # finally, use [0, 1] interval for ground truth Y and [-1, 1] interval for input/teacher forcing X
     y = x.copy()
     x[np.equal(x, 0)] = -1
